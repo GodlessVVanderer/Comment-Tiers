@@ -1,6 +1,4 @@
-
-
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from '@google/genai';
 // FIX: Import ProgressUpdate to ensure type conformity for progress callbacks.
 import type { Comment, Category, ProgressUpdate } from '../types';
 import { BATCH_SIZE, CONCURRENCY_LIMIT } from '../constants';
@@ -46,6 +44,13 @@ Instructions:
 2.  **Provide Title and Summary**: For each category, create a short, descriptive \`categoryTitle\` and a one-sentence \`summary\` that captures the essence of the comments within it.
 3.  **Assign Comments**: Assign each comment to the single most appropriate category. A comment should only belong to one category. Ensure all provided comment IDs are assigned.
 4.  **Format Output**: Return your analysis as a JSON object that strictly adheres to the provided schema. The output must contain a 'categories' array. Each category object in the array must have 'categoryTitle', 'summary', and 'comment_ids' properties. \`comment_ids\` must be an array of strings.`;
+
+const safetySettings = [
+    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+];
 
 /**
  * Analyzes a list of comments using the Gemini API.
@@ -98,6 +103,8 @@ export const analyzeComments = async (
           systemInstruction,
           responseMimeType: 'application/json',
           responseSchema: responseSchema,
+          // FIX: safetySettings must be part of the config object.
+          safetySettings,
         },
       });
 

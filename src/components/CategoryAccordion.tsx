@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import type { Category } from '../types';
-import { ChevronDownIcon, ChatBubbleIcon } from './Icons';
+import { ChevronDownIcon, ChatBubbleIcon, MagnifyingGlassIcon } from './Icons';
 import { CommentCard } from './CommentCard';
 
 interface CategoryAccordionItemProps {
@@ -13,6 +12,15 @@ interface CategoryAccordionItemProps {
 }
 
 const CategoryAccordionItem: React.FC<CategoryAccordionItemProps> = ({ category, isOpen, onToggle, onAddReply, onEditComment }) => {
+  const [filter, setFilter] = useState('');
+  
+  const filteredComments = filter
+    ? category.comments.filter(comment => 
+        comment.text.toLowerCase().includes(filter.toLowerCase()) ||
+        comment.author.toLowerCase().includes(filter.toLowerCase())
+      )
+    : category.comments;
+
   return (
     <div className="border border-gray-700/80 rounded-lg overflow-hidden bg-gray-800/60 shadow-md">
       <button
@@ -32,18 +40,39 @@ const CategoryAccordionItem: React.FC<CategoryAccordionItemProps> = ({ category,
         </div>
       </button>
       {isOpen && (
-        <div className="p-4 bg-gray-900/50 border-t border-gray-700/80">
-          <div className="space-y-4">
-            {category.comments.map((comment, index) => (
-              <CommentCard 
-                key={comment.id} 
-                comment={comment}
-                path={[index]} // Path for this top-level comment in the category
-                onAddReply={onAddReply}
-                onEditComment={onEditComment}
-              />
-            ))}
-          </div>
+        <div className="border-t border-gray-700/80">
+            <div className="p-4 bg-gray-900/30">
+                 <div className="relative">
+                    <input
+                        type="text"
+                        placeholder="Filter comments..."
+                        value={filter}
+                        onChange={(e) => setFilter(e.target.value)}
+                        className="w-full p-2 pl-8 bg-gray-900/70 border border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                    />
+                    <MagnifyingGlassIcon className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                </div>
+            </div>
+            <div className="p-4 bg-gray-900/50">
+              <div className="space-y-4">
+                {filteredComments.map((comment, index) => {
+                  // Find the original index to maintain correct paths for actions
+                  const originalIndex = category.comments.findIndex(c => c.id === comment.id);
+                  return (
+                    <CommentCard 
+                      key={comment.id} 
+                      comment={comment}
+                      path={[originalIndex]} // Path for this top-level comment in the category
+                      onAddReply={onAddReply}
+                      onEditComment={onEditComment}
+                    />
+                  )
+                })}
+                {filteredComments.length === 0 && (
+                    <p className="text-center text-sm text-gray-500 py-4">No comments match your filter.</p>
+                )}
+              </div>
+            </div>
         </div>
       )}
     </div>

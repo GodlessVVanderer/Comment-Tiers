@@ -1,12 +1,12 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './style.css';
+import styles from './style.css?inline';
 
-const APP_ID = 'youtube-comment-analyzer-root';
+const APP_ID = 'youtube-comment-analyzer-host';
 let currentVideoId: string | null = null;
 let root: ReactDOM.Root | null = null;
+let observer: MutationObserver | null = null;
 
 const getVideoId = (): string | null => {
   const urlParams = new URLSearchParams(window.location.search);
@@ -21,11 +21,9 @@ const mountApp = () => {
   }
   
   if (videoId === currentVideoId && document.getElementById(APP_ID)) {
-    // App is already mounted for this video
     return;
   }
   
-  // Unmount previous instance if video changes
   unmountApp();
 
   const targetElement = document.querySelector('#secondary-inner');
@@ -34,11 +32,25 @@ const mountApp = () => {
     return;
   }
   
-  const appRootContainer = document.createElement('div');
-  appRootContainer.id = APP_ID;
-  targetElement.prepend(appRootContainer);
+  // Container element that will live on the main page
+  const appHost = document.createElement('div');
+  appHost.id = APP_ID;
 
-  root = ReactDOM.createRoot(appRootContainer);
+  // Create the Shadow DOM
+  const shadowRoot = appHost.attachShadow({ mode: 'open' });
+  
+  // Create the element for React to mount into
+  const appContainer = document.createElement('div');
+  shadowRoot.appendChild(appContainer);
+
+  // Inject styles into the Shadow DOM
+  const styleElement = document.createElement('style');
+  styleElement.textContent = styles;
+  shadowRoot.appendChild(styleElement);
+
+  targetElement.prepend(appHost);
+
+  root = ReactDOM.createRoot(appContainer);
   root.render(
     <React.StrictMode>
       <App videoId={videoId} />
@@ -60,12 +72,29 @@ const unmountApp = () => {
   }
 };
 
-// Listen for YouTube's custom events that signify page navigation
-// 'yt-navigate-finish' is fired when a new "page" loads in the SPA
+const startObserver = () => {
+  // Disconnect any existing observer
+  if (observer) observer.disconnect();
+
+  observer = new MutationObserver((mutations) => {
+    // We only care that something changed, not what.
+    // yt-navigate-finish is more reliable but this is a fallback.
+    const newVideoId = getVideoId();
+    if (newVideoId !== currentVideoId) {
+      mountApp();
+    }
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+};
+
+// YouTube uses a single-page app architecture.
+// 'yt-navigate-finish' is a custom event fired when a page navigation completes.
 document.body.addEventListener('yt-navigate-finish', () => {
-    // Use a timeout to ensure the new page's DOM is ready
+    // A small delay can help ensure the page elements are ready.
     setTimeout(mountApp, 500);
 });
 
-// Initial mount on script injection
-mountApp();
+// Initial mount attempt
+setTimeout(mountApp, 1000);
+startObserver();
