@@ -142,9 +142,19 @@ const App: React.FC = () => {
             )}
 
             {error && (
-              <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg flex items-center gap-3 mb-6">
-                <ErrorIcon className="w-6 h-6" />
-                <span>{error}</span>
+              <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-3 mb-6">
+                <div className="flex items-center gap-3">
+                  <ErrorIcon className="w-6 h-6 flex-shrink-0" />
+                  <span>{error.message}</span>
+                </div>
+                {error.code === 'YOUTUBE_INVALID_KEY' && (
+                  <button 
+                    onClick={() => setIsHelpModalOpen(true)}
+                    className="flex-shrink-0 text-sm bg-red-800/70 hover:bg-red-700 text-white font-semibold py-1 px-3 rounded-md transition-colors"
+                  >
+                    Get Help
+                  </button>
+                )}
               </div>
             )}
             
@@ -213,7 +223,18 @@ const App: React.FC = () => {
       </div>
        <footer className="w-full max-w-4xl mx-auto text-center mt-12 text-gray-500 text-sm">
             <p>&copy; {new Date().getFullYear()} Comment Tiers. All rights reserved.</p>
-            <p>Powered by React, Tailwind CSS, and Gemini API.</p>
+            <p className="mb-2">Powered by React, Tailwind CSS, and Gemini API.</p>
+            <p>
+                Created by{' '}
+                <a 
+                    href="https://github.com/google/aistudio-web" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-gray-400 hover:text-indigo-400 underline"
+                >
+                    AI Studio
+                </a>
+            </p>
       </footer>
     </div>
     <ApiKeyHelpModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} />

@@ -1,7 +1,8 @@
-import create from 'zustand';
+
+import { create } from 'zustand';
 import { fetchComments } from './services/youtubeService';
 import { categorizeComments } from './services/geminiService';
-import type { Category, AnalysisStats, ProgressUpdate, Comment } from './types';
+import type { Category, AnalysisStats, ProgressUpdate, Comment, AppError } from './types';
 import { extractVideoId } from './utils';
 
 type NotificationPermission = 'default' | 'granted' | 'denied';
@@ -11,7 +12,7 @@ type AppState = {
   youtubeApiKey: string;
   maxComments: number;
   analysisPhase: 'idle' | 'fetching' | 'analyzing';
-  error: string | null;
+  error: AppError | null;
   categories: Category[];
   progress: ProgressUpdate | null;
   analysisStats: AnalysisStats | null;
@@ -103,12 +104,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { youtubeApiKey, youtubeUrl, maxComments } = get();
 
     if (!youtubeApiKey.trim()) {
-      set({ error: 'Please enter your YouTube API key.' });
+      set({ error: { code: 'MISSING_KEY', message: 'Please enter your YouTube API key.' } });
       return;
     }
     const videoId = extractVideoId(youtubeUrl);
     if (!videoId) {
-      set({ error: 'Please enter a valid YouTube video URL.' });
+      set({ error: { code: 'INVALID_URL', message: 'Please enter a valid YouTube video URL.' } });
       return;
     }
 
@@ -163,8 +164,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     } catch (e) {
       console.error(e);
+      let errorCode = 'UNKNOWN_ERROR';
       let userFriendlyMessage = 'An unknown error occurred.';
       if (e instanceof Error) {
+          errorCode = e.message; // Use the raw error message (e.g., 'YOUTUBE_INVALID_KEY') as the code
           switch (e.message) {
               case 'YOUTUBE_QUOTA_EXCEEDED':
                   userFriendlyMessage = 'YouTube API Quota Exceeded. Please try again tomorrow or use a different API key.';
@@ -186,7 +189,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                   break;
           }
       }
-      set({ error: `Failed to analyze comments. ${userFriendlyMessage}` });
+      set({ error: { code: errorCode, message: `Failed to analyze comments. ${userFriendlyMessage}` } });
     } finally {
       set({ analysisPhase: 'idle', progress: null });
       if (get().notificationPermission === 'granted') {

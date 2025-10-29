@@ -1,3 +1,9 @@
+
+export interface AppError {
+  code: string;
+  message: string;
+}
+
 export interface Comment {
   id: string;
   author: string;
