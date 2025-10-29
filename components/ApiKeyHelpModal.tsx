@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { CloseIcon } from './Icons';
 
@@ -59,7 +60,7 @@ export const ApiKeyHelpModal: React.FC<ApiKeyHelpModalProps> = ({ isOpen, onClos
         </ol>
 
         <div className="mt-6 text-xs text-gray-500 bg-gray-900/50 p-3 rounded-md">
-          <strong>Note:</strong> Your API key is used directly in your browser to communicate with YouTube's API and is not stored or seen by us.
+          <strong>Note:</strong> Your API key is used directly in your browser to communicate with YouTube's API and is not stored or seen by us. This application does not provide a fallback key; analysis will only work with a valid key you provide.
         </div>
 
       </div>

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Category, Comment } from '../types';
 import { CommentCard } from './CommentCard';
-import { ChevronDownIcon, ChatBubbleIcon } from './Icons';
+import { ChevronDownIcon, ChatBubbleIcon, PlusCircleIcon } from './Icons';
 
 interface CategoryAccordionProps {
   category: Category;
@@ -10,6 +10,10 @@ interface CategoryAccordionProps {
   onAddReply: (categoryTitle: string, path: number[], newReplyText: string) => void;
 }
 
+const INITIAL_VISIBLE_COUNT = 10;
+const LOAD_MORE_INCREMENT = 15;
+
+
 export const CategoryAccordion: React.FC<CategoryAccordionProps> = ({ 
   category, 
   isLoading = false, 
@@ -17,12 +21,21 @@ export const CategoryAccordion: React.FC<CategoryAccordionProps> = ({
   onAddReply
 }) => {
   const [isOpen, setIsOpen] = useState(isInitiallyOpen);
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
+
+  useEffect(() => {
+    // Reset the visible count when the accordion is closed to ensure it starts fresh on reopen.
+    if (!isOpen) {
+      setVisibleCount(INITIAL_VISIBLE_COUNT);
+    }
+  }, [isOpen]);
 
   const handleReply = (path: number[], newReplyText: string) => {
     onAddReply(category.categoryTitle, path, newReplyText);
   };
 
   const comments = category.comments || [];
+  const visibleComments = comments.slice(0, visibleCount);
 
   return (
     <div className="bg-gray-800/50 border border-gray-700 rounded-lg shadow-lg overflow-hidden transition-all duration-300">
@@ -61,7 +74,7 @@ export const CategoryAccordion: React.FC<CategoryAccordionProps> = ({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {comments.map((comment, index) => (
+                  {visibleComments.map((comment, index) => (
                       <CommentCard 
                         key={comment.id} 
                         comment={comment} 
@@ -69,6 +82,17 @@ export const CategoryAccordion: React.FC<CategoryAccordionProps> = ({
                         onAddReply={handleReply}
                       />
                   ))}
+                   {comments.length > visibleCount && (
+                    <div className="pt-2 text-center">
+                      <button
+                        onClick={() => setVisibleCount(prev => prev + LOAD_MORE_INCREMENT)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700/50 text-indigo-300 text-sm font-medium rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-indigo-500"
+                      >
+                        <PlusCircleIcon className="w-5 h-5" />
+                        Load More ({comments.length - visibleCount} remaining)
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

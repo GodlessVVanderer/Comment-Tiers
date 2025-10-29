@@ -185,7 +185,12 @@ export const useAppStore = create<AppState>((set, get) => ({
                   userFriendlyMessage = 'Could not access comments for this video. This may be due to permission issues or API key restrictions.';
                   break;
               default:
-                  userFriendlyMessage = e.message;
+                  if (e.message.includes('API key is missing')) {
+                      errorCode = 'GEMINI_KEY_MISSING';
+                      userFriendlyMessage = 'The Gemini API key is not configured for this application. Please contact the administrator.';
+                  } else {
+                      userFriendlyMessage = e.message;
+                  }
                   break;
           }
       }
