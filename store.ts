@@ -1,67 +1,36 @@
-
 import { create } from 'zustand';
 import { fetchComments } from './services/youtubeService';
 import { categorizeComments } from './services/geminiService';
 import type { Category, AnalysisStats, ProgressUpdate, Comment, AppError } from './types';
-import { extractVideoId } from './utils';
+
+declare const chrome: any;
 
 type NotificationPermission = 'default' | 'granted' | 'denied';
 
-type AppState = {
-  youtubeUrl: string;
-  youtubeApiKey: string;
-  geminiApiKey: string;
-  maxComments: number;
-  analysisPhase: 'idle' | 'fetching' | 'analyzing';
-  error: AppError | null;
-  categories: Category[];
-  progress: ProgressUpdate | null;
-  analysisStats: AnalysisStats | null;
-  isHelpModalOpen: boolean;
-  isGeminiHelpModalOpen: boolean;
-  isPricingModalOpen: boolean;
-  notificationPermission: NotificationPermission;
+const initialState = {
+  maxComments: 5000,
+  analysisPhase: 'idle' as 'idle' | 'fetching' | 'analyzing',
+  error: null as AppError | null,
+  categories: [] as Category[],
+  progress: null as ProgressUpdate | null,
+  analysisStats: null as AnalysisStats | null,
+  isPricingModalOpen: false,
+  notificationPermission: 'default' as NotificationPermission,
+};
 
-  // Actions
-  setYoutubeUrl: (url: string) => void;
-  setYoutubeApiKey: (key: string) => void;
-  setGeminiApiKey: (key: string) => void;
+type AppState = typeof initialState & {
   setMaxComments: (limit: number) => void;
-  setIsHelpModalOpen: (isOpen: boolean) => void;
-  setIsGeminiHelpModalOpen: (isOpen: boolean) => void;
   setIsPricingModalOpen: (isOpen: boolean) => void;
-  
   checkNotificationPermission: () => void;
-  requestNotificationPermission: () => void;
-  
   addReply: (categoryTitle: string, path: number[], newReplyText: string) => void;
-  
-  analyze: () => Promise<void>;
+  analyze: (videoId: string) => Promise<void>;
+  reset: () => void;
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
-  // Initial state
-  youtubeUrl: '',
-  youtubeApiKey: '',
-  geminiApiKey: '',
-  maxComments: 5000,
-  analysisPhase: 'idle',
-  error: null,
-  categories: [],
-  progress: null,
-  analysisStats: null,
-  isHelpModalOpen: false,
-  isGeminiHelpModalOpen: false,
-  isPricingModalOpen: false,
-  notificationPermission: 'default',
+  ...initialState,
 
-  // --- ACTIONS ---
-  setYoutubeUrl: (url) => set({ youtubeUrl: url }),
-  setYoutubeApiKey: (key) => set({ youtubeApiKey: key }),
-  setGeminiApiKey: (key) => set({ geminiApiKey: key }),
   setMaxComments: (limit) => set({ maxComments: limit }),
-  setIsHelpModalOpen: (isOpen) => set({ isHelpModalOpen: isOpen }),
-  setIsGeminiHelpModalOpen: (isOpen) => set({ isGeminiHelpModalOpen: isOpen }),
   setIsPricingModalOpen: (isOpen) => set({ isPricingModalOpen: isOpen }),
 
   checkNotificationPermission: () => {
@@ -70,18 +39,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  requestNotificationPermission: () => {
-    if ('Notification' in window) {
-      Notification.requestPermission().then(permission => {
-        set({ notificationPermission: permission as NotificationPermission });
-      });
-    }
-  },
-  
   addReply: (categoryTitle, path, newReplyText) => {
     set(state => {
       const newCategories = JSON.parse(JSON.stringify(state.categories));
-      
       const categoryIndex = newCategories.findIndex((c: Category) => c.categoryTitle === categoryTitle);
       if (categoryIndex === -1) return { categories: state.categories };
 
@@ -91,11 +51,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         path.forEach(index => {
           parentComment = parentComment.replies![index];
         });
-        if (!parentComment.replies) {
-          parentComment.replies = [];
-        }
+        if (!parentComment.replies) parentComment.replies = [];
         parentComment.replies.push({
-          id: `reply-${Date.now()}-${Math.random()}`,
+          id: `reply-${Date.now()}`,
           author: 'You',
           text: newReplyText
         });
@@ -108,22 +66,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
   },
 
-  analyze: async () => {
-    const { youtubeApiKey, geminiApiKey, youtubeUrl, maxComments } = get();
+  reset: () => {
+    set(initialState);
+  },
 
-    if (!youtubeApiKey.trim()) {
-      set({ error: { code: 'MISSING_KEY', message: 'Please enter your YouTube API key.' } });
-      return;
-    }
-    if (!geminiApiKey.trim()) {
-      set({ error: { code: 'MISSING_GEMINI_KEY', message: 'Please enter your Gemini API key.' } });
-      return;
-    }
-    const videoId = extractVideoId(youtubeUrl);
-    if (!videoId) {
-      set({ error: { code: 'INVALID_URL', message: 'Please enter a valid YouTube video URL.' } });
-      return;
-    }
+  analyze: async (videoId: string) => {
+    const { maxComments } = get();
 
     set({
       analysisPhase: 'fetching',
@@ -134,6 +82,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     });
 
     try {
+      const storedKeys = await chrome.storage.local.get(['youtubeApiKey', 'geminiApiKey']);
+      const { youtubeApiKey, geminiApiKey } = storedKeys;
+
+      if (!youtubeApiKey) {
+        throw new Error('YOUTUBE_INVALID_KEY');
+      }
+      if (!geminiApiKey) {
+        throw new Error('GEMINI_INVALID_KEY');
+      }
+
       const fetchedComments = await fetchComments(videoId, youtubeApiKey, maxComments);
       
       set({ analysisPhase: 'analyzing' });
@@ -145,22 +103,19 @@ export const useAppStore = create<AppState>((set, get) => ({
             state.categories.forEach(cat => categoriesMap.set(cat.categoryTitle, cat));
             
             newBatchCategories.forEach(newCat => {
-                if (!newCat || typeof newCat.categoryTitle !== 'string' || !Array.isArray(newCat.comments)) {
-                    return; 
-                }
-                const incomingComments = newCat.comments.filter(c => c && c.id && typeof c.author === 'string' && typeof c.text === 'string');
+                if (!newCat || !newCat.categoryTitle || !Array.isArray(newCat.comments)) return;
+                const incomingComments = newCat.comments.filter(c => c && c.id && c.author && c.text);
                 if (categoriesMap.has(newCat.categoryTitle)) {
                     const existingCat = categoriesMap.get(newCat.categoryTitle)!;
                     const existingCommentIds = new Set(existingCat.comments.map(c => c.id));
                     const newUniqueComments = incomingComments.filter(nc => !existingCommentIds.has(nc.id));
                     if (newUniqueComments.length > 0) {
-                      const updatedCategory = { ...existingCat, comments: [...existingCat.comments, ...newUniqueComments] };
-                      categoriesMap.set(newCat.categoryTitle, updatedCategory);
+                      existingCat.comments.push(...newUniqueComments);
                     }
                 } else {
                     categoriesMap.set(newCat.categoryTitle, {
                         ...newCat,
-                        id: `cat-${newCat.categoryTitle.replace(/\s+/g, '-').toLowerCase()}-${Math.random().toString(36).substr(2, 9)}`,
+                        id: `cat-${Date.now()}-${Math.random()}`,
                         comments: incomingComments,
                     });
                 }
@@ -179,40 +134,35 @@ export const useAppStore = create<AppState>((set, get) => ({
       let errorCode = 'UNKNOWN_ERROR';
       let userFriendlyMessage = 'An unknown error occurred.';
       if (e instanceof Error) {
-          errorCode = e.message; // Use the raw error message (e.g., 'YOUTUBE_INVALID_KEY') as the code
+          errorCode = e.message;
           switch (e.message) {
               case 'YOUTUBE_QUOTA_EXCEEDED':
-                  userFriendlyMessage = 'YouTube API Quota Exceeded. Please try again tomorrow or use a different API key.';
+                  userFriendlyMessage = 'YouTube API Quota Exceeded. Please try again tomorrow.';
                   break;
               case 'YOUTUBE_VIDEO_NOT_FOUND':
-                  userFriendlyMessage = 'The YouTube video was not found. Please check the URL and try again.';
+                  userFriendlyMessage = 'The YouTube video was not found.';
                   break;
               case 'YOUTUBE_COMMENTS_DISABLED':
                   userFriendlyMessage = 'Comments are disabled for this YouTube video.';
                   break;
               case 'YOUTUBE_INVALID_KEY':
-                  userFriendlyMessage = 'The provided YouTube API key is invalid or restricted. Please check the key in your Google Cloud Console.';
+                  userFriendlyMessage = 'YouTube API key is missing or invalid. Please set it in the extension options.';
                   break;
-              case 'YOUTUBE_FORBIDDEN':
-                  userFriendlyMessage = 'Could not access comments for this video. This may be due to permission issues or API key restrictions.';
+              case 'GEMINI_INVALID_KEY':
+                  userFriendlyMessage = 'Gemini API key is missing or invalid. Please set it in the extension options.';
                   break;
               default:
-                  if (e.message.toLowerCase().includes('api key not valid')) {
-                      errorCode = 'GEMINI_INVALID_KEY';
-                      userFriendlyMessage = 'The provided Gemini API key is invalid or restricted. Please check the key in Google AI Studio.';
-                  } else {
-                      userFriendlyMessage = e.message;
-                  }
+                  userFriendlyMessage = e.message;
                   break;
           }
       }
-      set({ error: { code: errorCode, message: `Failed to analyze comments. ${userFriendlyMessage}` } });
+      set({ error: { code: errorCode, message: userFriendlyMessage } });
     } finally {
       set({ analysisPhase: 'idle', progress: null });
       if (get().notificationPermission === 'granted') {
           new Notification('Comment Analysis Complete!', {
-              body: `Finished analyzing comments for the video. Click to see the results.`,
-              icon: '/vite.svg', 
+              body: `Finished analyzing comments. Click the extension icon to see results.`,
+              icon: chrome.runtime.getURL('icons/icon48.png'), 
           });
       }
     }
