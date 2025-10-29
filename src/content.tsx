@@ -1,124 +1,97 @@
+// FIX: Provide implementation for the content script.
+// This script is injected into YouTube pages to add the analysis UI.
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import styles from './style.css?inline'; // Import styles as a string for injection
-import { useAppStore } from './store';
 
-// FIX: Declare chrome for TypeScript
-declare const chrome: any;
-
-console.log("YouTube Comment Analyzer: Content script loaded.");
-
-const INJECTION_POINT_ID = 'youtube-comment-analyzer-root';
+const APP_ROOT_ID = 'youtube-comment-analyzer-root';
+let currentVideoId: string | null = null;
+let appRoot: HTMLDivElement | null = null;
 let reactRoot: ReactDOM.Root | null = null;
-let hasInjected = false;
 
-const getVideoId = () => new URLSearchParams(window.location.search).get('v');
-
-const injectApp = (videoId: string) => {
-  let appContainer = document.getElementById(INJECTION_POINT_ID);
-  
-  if (appContainer) {
-    console.log("YouTube Comment Analyzer: App container already exists.");
-    return;
-  }
-  
-  const commentsSection = document.getElementById('comments');
-  if (commentsSection) {
-    console.log("YouTube Comment Analyzer: Found comments section, injecting app.");
-    appContainer = document.createElement('div');
-    appContainer.id = INJECTION_POINT_ID;
-    
-    // Use Shadow DOM for style isolation
-    const shadowRoot = appContainer.attachShadow({ mode: 'open' });
-    
-    const rootDiv = document.createElement('div');
-    shadowRoot.appendChild(rootDiv);
-
-    // Inject styles into the Shadow DOM
-    const styleEl = document.createElement('style');
-    styleEl.textContent = styles;
-    shadowRoot.appendChild(styleEl);
-
-    commentsSection.prepend(appContainer);
-
-    reactRoot = ReactDOM.createRoot(rootDiv);
-    reactRoot.render(
-      <React.StrictMode>
-        <App videoId={videoId} />
-      </React.StrictMode>
-    );
-    hasInjected = true;
-  } else {
-    // This case might be hit if the comments section loads slowly.
-    // The interval will handle retries.
-  }
-};
-
-const unmountApp = () => {
+/**
+ * Removes the injected app from the DOM and unmounts the React component.
+ */
+const cleanup = () => {
   if (reactRoot) {
     reactRoot.unmount();
     reactRoot = null;
   }
-  const appContainer = document.getElementById(INJECTION_POINT_ID);
-  if (appContainer) {
-    appContainer.remove();
+  if (appRoot) {
+    appRoot.remove();
+    appRoot = null;
   }
-  hasInjected = false;
-  console.log("YouTube Comment Analyzer: Unmounted existing app instance.");
+  currentVideoId = null;
 };
 
+/**
+ * Injects the React application into the YouTube video page.
+ * @param videoId The ID of the YouTube video to analyze.
+ */
+const injectApp = (videoId: string) => {
+  // If we are already displaying the analyzer for this video, do nothing.
+  if (currentVideoId === videoId && document.getElementById(APP_ROOT_ID)) {
+    return;
+  }
+
+  // Clean up any previous instance of the app.
+  cleanup();
+  
+  // Find the injection point below the video player.
+  const target = document.querySelector('#below');
+  if (!target) {
+    // Retry after a short delay, as the page might still be loading.
+    setTimeout(() => injectApp(videoId), 500);
+    return;
+  }
+  
+  // Create the root element for our app and inject it.
+  appRoot = document.createElement('div');
+  appRoot.id = APP_ROOT_ID;
+  target.prepend(appRoot);
+  
+  // Render the React app into our root element.
+  reactRoot = ReactDOM.createRoot(appRoot);
+  reactRoot.render(
+    <React.StrictMode>
+      <App videoId={videoId} />
+    </React.StrictMode>
+  );
+  
+  currentVideoId = videoId;
+};
+
+/**
+ * Main function to check the current URL and decide whether to inject or clean up the app.
+ */
 const main = () => {
-    let currentVideoId = getVideoId();
-
-    const attemptInjection = () => {
-        if (currentVideoId && document.getElementById('comments')) {
-            unmountApp(); // Ensure old instance is gone
-            injectApp(currentVideoId);
-            return true; // Injection successful
-        }
-        return false; // Injection point not found
-    };
-    
-    // Keep trying to inject for a few seconds, as YouTube's layout can be slow to load.
-    let injectionTries = 0;
-    const maxInjectionTries = 20; // 10 seconds total
-    const injectionInterval = setInterval(() => {
-        injectionTries++;
-        if (attemptInjection()) {
-            clearInterval(injectionInterval);
-        } else if (injectionTries >= maxInjectionTries) {
-            clearInterval(injectionInterval);
-            if (!hasInjected) {
-                console.error("Comment Analyzer Error: Could not find the YouTube comments section (#comments) to attach to after 10 seconds. The YouTube page structure may have changed.");
-            }
-        }
-    }, 500);
-
-    // Listen for navigations within YouTube's SPA
-    const titleObserver = new MutationObserver(() => {
-        const newVideoId = getVideoId();
-        if (newVideoId && newVideoId !== currentVideoId) {
-            console.log("YouTube Comment Analyzer: Detected navigation to new video.");
-            currentVideoId = newVideoId;
-            unmountApp(); // Clean up immediately on navigation
-            main(); // Re-run the injection logic for the new page
-        }
-    });
-
-    const titleElement = document.querySelector('title');
-    if (titleElement) {
-        titleObserver.observe(titleElement, { childList: true });
-    }
+  const urlParams = new URLSearchParams(window.location.search);
+  const videoId = urlParams.get('v');
+  
+  if (window.location.pathname === '/watch' && videoId) {
+    injectApp(videoId);
+  } else {
+    // If we are not on a watch page, ensure the app is removed.
+    cleanup();
+  }
 };
 
+// Initial run when the content script is loaded.
 main();
 
-// Listen for messages from other parts of the extension (e.g., options page)
-chrome.runtime.onMessage.addListener((request: any) => {
-  if (request.action === 'keys-updated') {
-    console.log("YouTube Comment Analyzer: Received keys-updated message. Re-initializing store.");
-    // Re-initialize the store to fetch the new keys
-    useAppStore.getState().initialize();
+// YouTube is a Single Page Application (SPA). We need to listen for navigation events
+// to re-run our injection logic. The 'yt-navigate-finish' event is a reliable way to do this.
+window.addEventListener('yt-navigate-finish', main);
+
+// As a fallback, use a MutationObserver to detect URL changes in case the event doesn't fire.
+// This is less efficient but more robust.
+let lastUrl = location.href; 
+new MutationObserver(() => {
+  const url = location.href;
+  if (url !== lastUrl) {
+    lastUrl = url;
+    // Use a small delay to allow the new page content to render.
+    setTimeout(main, 100);
   }
-});
+}).observe(document.body, { childList: true, subtree: true });

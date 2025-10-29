@@ -1,212 +1,235 @@
+
 import { create } from 'zustand';
-import type { Category, Comment, AnalysisStats, ProgressUpdate } from './types';
+import { immer } from 'zustand/middleware/immer';
+import type { AnalysisStats, Category, Comment, ProgressUpdate } from './types';
 import { fetchComments } from './services/youtubeService';
 import { analyzeComments } from './services/geminiService';
-import { MIN_WORD_COUNT, NGRAM_SIZE, NGRAM_SPAM_THRESHOLD } from './constants';
+import { NGRAM_SIZE, NGRAM_SPAM_THRESHOLD, MIN_WORD_COUNT, COMMENT_LIMIT_OPTIONS } from './constants';
 
 // FIX: Declare chrome for TypeScript
 declare const chrome: any;
 
-type Status = 'idle' | 'configuring' | 'fetching' | 'preprocessing' | 'analyzing' | 'complete' | 'error';
+type AppStatus = 'idle' | 'configuring' | 'fetching' | 'preprocessing' | 'analyzing' | 'complete' | 'error';
 
 interface AppState {
-  // State
-  status: Status;
+  youtubeApiKey: string;
+  geminiApiKey: string;
+  keysLoaded: boolean;
+  status: AppStatus;
   error: string | null;
   stats: AnalysisStats;
   progress: ProgressUpdate;
   categories: Category[];
-  keysLoaded: boolean;
   commentLimit: number;
-  youtubeApiKey: string | null;
-  geminiApiKey: string | null;
-  
-  // Actions
-  initialize: () => void;
-  analyze: (videoId: string) => Promise<void>;
-  setCommentLimit: (limit: number) => void;
-  addCommentToCategory: (categoryTitle: string, comment: Comment) => void;
-  addReplyToComment: (categoryTitle:string, path: number[], reply: Comment) => void;
-  editCommentInCategory: (categoryTitle: string, path: number[], newText: string) => void;
-  reset: () => void;
 }
 
-const initialState = {
-  status: 'idle' as Status,
+interface AppActions {
+  initialize: () => void;
+  setCommentLimit: (limit: number) => void;
+  analyze: (videoId: string) => Promise<void>;
+  reset: () => void;
+  addCommentToCategory: (categoryTitle: string, comment: Comment) => void;
+  addReplyToComment: (categoryTitle: string, path: number[], reply: Comment) => void;
+  editCommentInCategory: (categoryTitle: string, path: number[], newText: string) => void;
+}
+
+const initialState: AppState = {
+  youtubeApiKey: '',
+  geminiApiKey: '',
+  keysLoaded: false,
+  status: 'idle',
   error: null,
   stats: { total: 0, filtered: 0, analyzed: 0 },
   progress: { processed: 0, total: 0, currentBatch: 0, totalBatches: 0, etaSeconds: null },
   categories: [],
-  keysLoaded: false,
-  commentLimit: 1000,
-  youtubeApiKey: null,
-  geminiApiKey: null,
+  commentLimit: COMMENT_LIMIT_OPTIONS[0],
 };
 
-export const useAppStore = create<AppState>((set, get) => ({
-  ...initialState,
-  
-  initialize: () => {
-    chrome.storage.local.get(['youtubeApiKey', 'geminiApiKey'], (result) => {
-      const { youtubeApiKey, geminiApiKey } = result;
-      set({
-        youtubeApiKey,
-        geminiApiKey,
-        keysLoaded: true,
-        status: (youtubeApiKey && geminiApiKey) ? 'idle' : 'configuring',
+export const useAppStore = create<AppState & AppActions>()(
+  immer((set, get) => ({
+    ...initialState,
+
+    initialize: () => {
+      chrome.storage.local.get(['youtubeApiKey', 'geminiApiKey'], (result: { youtubeApiKey?: string; geminiApiKey?: string }) => {
+        const { youtubeApiKey, geminiApiKey } = result;
+        set(state => {
+          state.youtubeApiKey = youtubeApiKey || '';
+          state.geminiApiKey = geminiApiKey || '';
+          state.keysLoaded = true;
+          if (!youtubeApiKey || !geminiApiKey) {
+            state.status = 'configuring';
+          } else {
+            // If we were in a "needs keys" or error state, go back to idle.
+            if (get().status === 'configuring' || get().status === 'error') {
+               state.status = 'idle';
+               state.error = null;
+            }
+          }
+        });
       });
-    });
-  },
-  
-  analyze: async (videoId: string) => {
-    const { youtubeApiKey, geminiApiKey, commentLimit } = get();
+    },
 
-    if (!youtubeApiKey || !geminiApiKey) {
-      set({ status: 'error', error: 'API keys are not configured.' });
-      return;
-    }
+    setCommentLimit: (limit: number) => {
+      set(state => {
+        state.commentLimit = limit;
+      });
+    },
 
-    set({ ...initialState, status: 'fetching', keysLoaded: true, youtubeApiKey, geminiApiKey, commentLimit });
+    reset: () => {
+        set(state => {
+            const { youtubeApiKey, geminiApiKey, keysLoaded } = state;
+            Object.assign(state, initialState);
+            state.youtubeApiKey = youtubeApiKey;
+            state.geminiApiKey = geminiApiKey;
+            state.keysLoaded = keysLoaded;
+        });
+    },
 
-    try {
-      // 1. Fetch Comments
-      const rawComments = await fetchComments(videoId, youtubeApiKey, commentLimit);
-      set(state => ({ stats: { ...state.stats, total: rawComments.length }}));
+    analyze: async (videoId: string) => {
+      const { youtubeApiKey, geminiApiKey, commentLimit } = get();
 
-      // 2. Pre-process comments in the background script for performance
-      set({ status: 'preprocessing' });
-      const prefilterRequest = { 
-        action: 'prefilter-comments',
-        payload: {
-          comments: rawComments,
-          minWordCount: MIN_WORD_COUNT,
-          ngramSize: NGRAM_SIZE,
-          spamThreshold: NGRAM_SPAM_THRESHOLD,
-        }
-      };
-
-      const filteredComments: Comment[] = await chrome.runtime.sendMessage(prefilterRequest);
-      
-      set(state => ({ 
-          stats: { ...state.stats, filtered: rawComments.length - filteredComments.length, analyzed: filteredComments.length },
-      }));
-      
-      if (filteredComments.length === 0) {
-        set({ status: 'complete', categories: [] });
+      if (!youtubeApiKey || !geminiApiKey) {
+        set({ status: 'configuring', error: "API keys are not set. Please set them in the extension options." });
         return;
       }
-
-      // 3. Analyze comments
-      set({ status: 'analyzing' });
-      const categories = await analyzeComments(
-        filteredComments,
-        geminiApiKey,
-        (progressUpdate) => {
-          set({ progress: progressUpdate });
-        }
-      );
-
-      // 4. Analysis complete
-      set({ status: 'complete', categories });
-
-      // 5. Send notification
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'assets/icon128.png',
-        title: 'Analysis Complete',
-        message: `Finished analyzing comments for video ID: ${videoId}.`,
-      });
-
-    } catch (error: any) {
-      console.error("Analysis failed:", error);
-      let errorMessage = error.message || 'An unknown error occurred.';
-
-      // Provide more user-friendly error messages
-      if (errorMessage.includes('YOUTUBE_COMMENTS_DISABLED')) {
-        errorMessage = 'This video has its comments disabled.';
-      } else if (errorMessage.includes('YOUTUBE')) {
-        errorMessage = `YouTube API Error: ${errorMessage.split('_').slice(1).join(' ').toLowerCase()}`;
-      } else if (errorMessage.includes('GEMINI')) {
-        errorMessage = `Gemini API Error: ${errorMessage.split('_').slice(1).join(' ').toLowerCase()}`;
-      }
       
-      set({ status: 'error', error: errorMessage });
-    }
-  },
+      set({ status: 'fetching', error: null, progress: initialState.progress, stats: initialState.stats, categories: [] });
 
-  setCommentLimit: (limit) => set({ commentLimit: limit }),
-  
-  addCommentToCategory: (categoryTitle, comment) => {
-    set(state => ({
-      categories: state.categories.map(cat => 
-        cat.categoryTitle === categoryTitle 
-          ? { ...cat, comments: [comment, ...cat.comments] } 
-          : cat
-      )
-    }));
-  },
-  
-  addReplyToComment: (categoryTitle, path, reply) => {
-    set(state => {
-      const newCategories = state.categories.map(cat => ({ ...cat }));
-      const category = newCategories.find(c => c.categoryTitle === categoryTitle);
-      if (!category) return state;
+      try {
+        // 1. Fetch comments
+        const allComments = await fetchComments(videoId, youtubeApiKey, commentLimit);
+        set(state => {
+          state.stats.total = allComments.length;
+        });
 
-      let currentLevel: Comment[] = category.comments;
-      let parentComment: Comment | null = null;
-      for (let i = 0; i < path.length; i++) {
-        if (!currentLevel?.[path[i]]) return state; // Invalid path
-        if (i === path.length - 1) {
-          parentComment = currentLevel[path[i]];
-        } else {
-          const nextLevel = currentLevel[path[i]].replies;
-          if (!nextLevel) return state; // Invalid path
-          currentLevel = nextLevel;
+        if (allComments.length === 0) {
+          set({ status: 'complete', error: null, stats: { total: 0, filtered: 0, analyzed: 0 } });
+          return;
         }
-      }
 
-      if (parentComment) {
-        if (!parentComment.replies) parentComment.replies = [];
-        parentComment.replies = [reply, ...parentComment.replies];
-      }
-      
-      return { categories: newCategories };
-    });
-  },
-
-  editCommentInCategory: (categoryTitle, path, newText) => {
-    set(state => {
-      const newCategories = state.categories.map(cat => ({ ...cat }));
-      const category = newCategories.find(c => c.categoryTitle === categoryTitle);
-      if (!category) return state;
-
-      let currentLevel: Comment[] = category.comments;
-      let targetComment: Comment | null = null;
-      for (let i = 0; i < path.length; i++) {
-        if (!currentLevel?.[path[i]]) return state; // path is invalid
-        if (i === path.length - 1) {
-          targetComment = currentLevel[path[i]];
-        } else {
-          const nextLevel = currentLevel[path[i]].replies;
-          if (!nextLevel) return state; // invalid path
-          currentLevel = nextLevel;
+        // 2. Prefilter comments in background script
+        set({ status: 'preprocessing' });
+        const filteredComments: Comment[] = await new Promise((resolve) => {
+            chrome.runtime.sendMessage(
+                {
+                    action: 'prefilter-comments',
+                    payload: {
+                        comments: allComments,
+                        minWordCount: MIN_WORD_COUNT,
+                        ngramSize: NGRAM_SIZE,
+                        spamThreshold: NGRAM_SPAM_THRESHOLD,
+                    },
+                },
+                (response: Comment[]) => {
+                    resolve(response || []); // Ensure we resolve with an array even if something fails
+                }
+            );
+        });
+        
+        const filteredCount = allComments.length - filteredComments.length;
+        set(state => {
+          state.stats.filtered = filteredCount;
+          state.stats.analyzed = filteredComments.length;
+        });
+        
+        if (filteredComments.length === 0) {
+            set({ status: 'complete', error: "No suitable comments for analysis after filtering noise."});
+            return;
         }
+
+        // 3. Analyze comments
+        set({ status: 'analyzing' });
+        const categories = await analyzeComments(
+          filteredComments,
+          geminiApiKey,
+          (progressUpdate) => {
+            set(state => {
+              state.progress = progressUpdate;
+            });
+          }
+        );
+
+        set({ status: 'complete', categories: categories.sort((a, b) => b.comments.length - a.comments.length) });
+
+      } catch (e: any) {
+        console.error("Analysis failed:", e);
+        let errorMessage = "An unknown error occurred during analysis.";
+        if (e instanceof Error) {
+            switch(e.message) {
+                case 'YOUTUBE_QUOTA_EXCEEDED':
+                    errorMessage = 'YouTube API daily quota exceeded. Please try again tomorrow or use a different key.';
+                    break;
+                case 'YOUTUBE_VIDEO_NOT_FOUND':
+                    errorMessage = 'The video could not be found.';
+                    break;
+                case 'YOUTUBE_COMMENTS_DISABLED':
+                    errorMessage = 'Comments are disabled for this video.';
+                    break;
+                case 'YOUTUBE_INVALID_KEY':
+                    errorMessage = 'Your YouTube API key is invalid. Please check it in the extension options.';
+                    break;
+                case 'GEMINI_INVALID_KEY':
+                    errorMessage = 'Your Gemini API key is invalid or missing. Please check it in the extension options.';
+                    break;
+                default:
+                    if (e.message.startsWith('Gemini API Error:')) {
+                        errorMessage = e.message;
+                    } else if (e.message.startsWith('YouTube API Error:')) {
+                        errorMessage = e.message;
+                    } else {
+                        errorMessage = e.message;
+                    }
+            }
+        }
+        set({ status: 'error', error: errorMessage });
       }
-      if (targetComment) {
-        targetComment.text = newText;
-      }
-      return { categories: newCategories };
-    });
-  },
-  
-  reset: () => {
-    const { keysLoaded, youtubeApiKey, geminiApiKey } = get();
-    set({
-      ...initialState,
-      keysLoaded,
-      youtubeApiKey,
-      geminiApiKey,
-      status: (youtubeApiKey && geminiApiKey) ? 'idle' : 'configuring'
-    });
-  }
-}));
+    },
+
+    addCommentToCategory: (categoryTitle: string, comment: Comment) => {
+        set(state => {
+            const category = state.categories.find(c => c.categoryTitle === categoryTitle);
+            if (category) {
+                category.comments.unshift(comment);
+            }
+        });
+    },
+
+    addReplyToComment: (categoryTitle: string, path: number[], reply: Comment) => {
+        set(state => {
+            const category = state.categories.find(c => c.categoryTitle === categoryTitle);
+            if (!category) return;
+
+            let parent: Comment | undefined = category.comments[path[0]];
+            for (let i = 1; i < path.length; i++) {
+                if (!parent || !parent.replies) return;
+                parent = parent.replies[path[i]];
+            }
+
+            if (parent) {
+                if (!parent.replies) {
+                    parent.replies = [];
+                }
+                parent.replies.unshift(reply);
+            }
+        });
+    },
+
+    editCommentInCategory: (categoryTitle: string, path: number[], newText: string) => {
+        set(state => {
+            const category = state.categories.find(c => c.categoryTitle === categoryTitle);
+            if (!category) return;
+            
+            let commentToEdit: Comment | undefined = category.comments[path[0]];
+            // Traverse to find the exact comment/reply
+            for (let i = 1; i < path.length; i++) {
+                if (!commentToEdit || !commentToEdit.replies) return;
+                commentToEdit = commentToEdit.replies[path[i]];
+            }
+
+            if (commentToEdit) {
+                commentToEdit.text = newText;
+            }
+        });
+    },
+  }))
+);
