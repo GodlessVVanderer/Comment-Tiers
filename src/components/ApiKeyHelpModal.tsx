@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { CloseIcon } from './Icons';
 
@@ -59,7 +60,14 @@ export const ApiKeyHelpModal: React.FC<ApiKeyHelpModalProps> = ({ isOpen, onClos
           </li>
         </ol>
 
-        <div className="mt-6 text-xs text-gray-500 bg-gray-900/50 p-3 rounded-md">
+        <div className="mt-6 p-3 rounded-md bg-yellow-900/40 border border-yellow-700 text-yellow-300">
+            <h4 className="font-bold text-sm mb-1">Security Best Practice</h4>
+            <p className="text-xs">
+                To prevent misuse, you should restrict your API key. Click on your new key in the Cloud Console, under "Application restrictions," select "HTTP referrers (web sites)," and add an entry for <strong>https://www.youtube.com/*</strong>
+            </p>
+        </div>
+
+        <div className="mt-4 text-xs text-gray-500 bg-gray-900/50 p-3 rounded-md">
           <strong>Note:</strong> Your API key is used directly in your browser to communicate with YouTube's API and is not stored or seen by us. This application does not provide a fallback key; analysis will only work with a valid key you provide.
         </div>
 

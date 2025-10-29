@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 import { CloseIcon } from './Icons';
 
@@ -52,8 +53,15 @@ export const GeminiApiKeyHelpModal: React.FC<GeminiApiKeyHelpModalProps> = ({ is
             Copy the generated API key and paste it into the input field in the app.
           </li>
         </ol>
+        
+        <div className="mt-6 p-3 rounded-md bg-yellow-900/40 border border-yellow-700 text-yellow-300">
+            <h4 className="font-bold text-sm mb-1">Security Best Practice</h4>
+            <p className="text-xs">
+                To prevent unexpected charges, it's a good idea to monitor your API usage. In the Google Cloud Console for the project linked to your key, navigate to "Billing" and set up "Budgets & alerts" to be notified of your spending.
+            </p>
+        </div>
 
-        <div className="mt-6 text-xs text-gray-500 bg-gray-900/50 p-3 rounded-md">
+        <div className="mt-4 text-xs text-gray-500 bg-gray-900/50 p-3 rounded-md">
           <strong>Note:</strong> Your API key is used directly in your browser to communicate with Google's API and is not stored or seen by us. You are responsible for any costs associated with your key.
         </div>
 

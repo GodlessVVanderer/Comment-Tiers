@@ -11,6 +11,7 @@ console.log("YouTube Comment Analyzer: Content script loaded.");
 
 const INJECTION_POINT_ID = 'youtube-comment-analyzer-root';
 let reactRoot: ReactDOM.Root | null = null;
+let hasInjected = false;
 
 const getVideoId = () => new URLSearchParams(window.location.search).get('v');
 
@@ -47,8 +48,10 @@ const injectApp = (videoId: string) => {
         <App videoId={videoId} />
       </React.StrictMode>
     );
+    hasInjected = true;
   } else {
-    console.log("YouTube Comment Analyzer: Could not find comments section to inject app.");
+    // This case might be hit if the comments section loads slowly.
+    // The interval will handle retries.
   }
 };
 
@@ -61,6 +64,7 @@ const unmountApp = () => {
   if (appContainer) {
     appContainer.remove();
   }
+  hasInjected = false;
   console.log("YouTube Comment Analyzer: Unmounted existing app instance.");
 };
 
@@ -71,18 +75,25 @@ const main = () => {
         if (currentVideoId && document.getElementById('comments')) {
             unmountApp(); // Ensure old instance is gone
             injectApp(currentVideoId);
-            return true;
+            return true; // Injection successful
         }
-        return false;
+        return false; // Injection point not found
     };
     
-    // Initial injection attempt
+    // Keep trying to inject for a few seconds, as YouTube's layout can be slow to load.
+    let injectionTries = 0;
+    const maxInjectionTries = 20; // 10 seconds total
     const injectionInterval = setInterval(() => {
+        injectionTries++;
         if (attemptInjection()) {
             clearInterval(injectionInterval);
+        } else if (injectionTries >= maxInjectionTries) {
+            clearInterval(injectionInterval);
+            if (!hasInjected) {
+                console.error("Comment Analyzer Error: Could not find the YouTube comments section (#comments) to attach to after 10 seconds. The YouTube page structure may have changed.");
+            }
         }
     }, 500);
-    setTimeout(() => clearInterval(injectionInterval), 10000); // Stop trying after 10s
 
     // Listen for navigations within YouTube's SPA
     const titleObserver = new MutationObserver(() => {
@@ -90,12 +101,8 @@ const main = () => {
         if (newVideoId && newVideoId !== currentVideoId) {
             console.log("YouTube Comment Analyzer: Detected navigation to new video.");
             currentVideoId = newVideoId;
-            const newInjectionInterval = setInterval(() => {
-                if (attemptInjection()) {
-                    clearInterval(newInjectionInterval);
-                }
-            }, 500);
-            setTimeout(() => clearInterval(newInjectionInterval), 10000);
+            unmountApp(); // Clean up immediately on navigation
+            main(); // Re-run the injection logic for the new page
         }
     });
 

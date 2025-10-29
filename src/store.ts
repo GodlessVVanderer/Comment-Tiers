@@ -120,11 +120,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (error: any) {
       console.error("Analysis failed:", error);
       let errorMessage = error.message || 'An unknown error occurred.';
-      if (errorMessage.includes('YOUTUBE')) {
+
+      // Provide more user-friendly error messages
+      if (errorMessage.includes('YOUTUBE_COMMENTS_DISABLED')) {
+        errorMessage = 'This video has its comments disabled.';
+      } else if (errorMessage.includes('YOUTUBE')) {
         errorMessage = `YouTube API Error: ${errorMessage.split('_').slice(1).join(' ').toLowerCase()}`;
       } else if (errorMessage.includes('GEMINI')) {
         errorMessage = `Gemini API Error: ${errorMessage.split('_').slice(1).join(' ').toLowerCase()}`;
       }
+      
       set({ status: 'error', error: errorMessage });
     }
   },
