@@ -1,5 +1,3 @@
-
-
 import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import type { Comment, Category, AnalysisStats, ProgressUpdate } from '../types';
 
@@ -159,13 +157,13 @@ export const categorizeComments = async (
           config: {
             responseMimeType: 'application/json',
             responseSchema: responseSchema,
-            // FIX: `safetySettings` is a model configuration parameter and must be nested inside the `config` object.
+            // FIX: Moved `safetySettings` into the `config` object to match the API structure.
             safetySettings: [
                 { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
                 { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
                 { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
                 { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-            ]
+            ],
           },
         });
 

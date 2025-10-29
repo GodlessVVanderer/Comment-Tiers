@@ -1,9 +1,3 @@
-
-export interface AppError {
-  code: string;
-  message: string;
-}
-
 export interface Comment {
   id: string;
   author: string;
@@ -12,7 +6,6 @@ export interface Comment {
 }
 
 export interface Category {
-  id: string; // CRITICAL FIX: Add a unique ID to prevent rendering crashes.
   categoryTitle: string;
   summary: string;
   comments: Comment[];
