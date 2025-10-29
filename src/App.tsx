@@ -109,7 +109,7 @@ const App: React.FC<AppProps> = ({ videoId }) => {
   return (
     <div className="p-4 bg-gray-900 text-gray-300 font-sans max-w-3xl mx-auto my-4 rounded-xl border border-gray-700/80 shadow-2xl">
       <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
-        <h1 className="text-xl font-bold text-white mb-3 sm:mb-0">YouTube Comment Analyzer</h1>
+        <h1 className="text-xl font-bold text-white mb-3 sm:mb-0">Comment Tiers Analyzer</h1>
         <div className="flex items-center gap-2">
             <p className="text-xs text-gray-500">Powered by</p>
             <span className="font-semibold text-sm text-indigo-400">Gemini</span>
