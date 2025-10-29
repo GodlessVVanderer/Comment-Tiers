@@ -8,7 +8,7 @@ import { ApiKeyHelpModal } from './components/ApiKeyHelpModal';
 import { GeminiApiKeyHelpModal } from './components/GeminiApiKeyHelpModal';
 import { PricingInfoModal } from './components/PricingInfoModal';
 import { NotificationPermissionBanner } from './components/NotificationPermissionBanner';
-import { LogoIcon, SparklesIcon, ErrorIcon, SearchIcon, YoutubeIcon, KeyIcon, InformationCircleIcon, CurrencyDollarIcon } from './components/Icons';
+import { LogoIcon, SparklesIcon, ErrorIcon, SearchIcon, YoutubeIcon, KeyIcon, InformationCircleIcon, CurrencyDollarIcon, HeartIcon, CoffeeIcon } from './components/Icons';
 import { extractVideoId, formatEta } from './utils';
 
 const COMMENT_LIMIT_OPTIONS = [1000, 2000, 5000, 10000, 20000, 30000];
@@ -214,7 +214,7 @@ const App: React.FC = () => {
             )}
             
             {analysisStats && !isLoading && (
-               <div className="mb-6">
+               <div className="mb-6 space-y-6">
                 <StatsCard stats={analysisStats} />
                </div>
             )}
@@ -246,10 +246,18 @@ const App: React.FC = () => {
         </main>
       </div>
        <footer className="w-full max-w-4xl mx-auto text-center mt-12 text-gray-500 text-sm">
-            <p>&copy; {new Date().getFullYear()} Comment Tiers. All rights reserved.</p>
-            <p className="mb-2">Powered by React, Tailwind CSS, and Gemini API.</p>
-            <p>
-                Created by{' '}
+            <div className="flex justify-center items-center gap-6 mb-4">
+                 <a href="https://github.com/sponsors/google" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-gray-400 hover:text-pink-400 transition-colors">
+                    <HeartIcon className="w-4 h-4" />
+                    Sponsor
+                </a>
+                <span className="text-gray-600">|</span>
+                <a href="https://www.buymeacoffee.com/placeholder" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-gray-400 hover:text-yellow-400 transition-colors">
+                    <CoffeeIcon className="w-4 h-4" />
+                    Buy Me a Coffee
+                </a>
+            </div>
+            <p>&copy; {new Date().getFullYear()} Comment Tiers. Created by{' '}
                 <a 
                     href="https://github.com/google/aistudio-web" 
                     target="_blank" 
