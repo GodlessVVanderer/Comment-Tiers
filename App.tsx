@@ -5,6 +5,7 @@ import type { Category } from './types';
 import { CategoryAccordion } from './components/CategoryAccordion';
 import { StatsCard } from './components/StatsCard';
 import { ApiKeyHelpModal } from './components/ApiKeyHelpModal';
+import { GeminiApiKeyHelpModal } from './components/GeminiApiKeyHelpModal';
 import { PricingInfoModal } from './components/PricingInfoModal';
 import { NotificationPermissionBanner } from './components/NotificationPermissionBanner';
 import { LogoIcon, SparklesIcon, ErrorIcon, SearchIcon, YoutubeIcon, KeyIcon, InformationCircleIcon, CurrencyDollarIcon } from './components/Icons';
@@ -16,6 +17,7 @@ const App: React.FC = () => {
   const {
     youtubeUrl, setYoutubeUrl,
     youtubeApiKey, setYoutubeApiKey,
+    geminiApiKey, setGeminiApiKey,
     maxComments, setMaxComments,
     analysisPhase,
     error,
@@ -23,6 +25,7 @@ const App: React.FC = () => {
     progress,
     analysisStats,
     isHelpModalOpen, setIsHelpModalOpen,
+    isGeminiHelpModalOpen, setIsGeminiHelpModalOpen,
     isPricingModalOpen, setIsPricingModalOpen,
     notificationPermission,
     checkNotificationPermission,
@@ -37,7 +40,7 @@ const App: React.FC = () => {
   
   const isLoading = analysisPhase !== 'idle';
   const isValidUrl = extractVideoId(youtubeUrl) !== null;
-  const canAnalyze = isValidUrl && youtubeApiKey.trim() !== '';
+  const canAnalyze = isValidUrl && youtubeApiKey.trim() !== '' && geminiApiKey.trim() !== '';
   
   return (
     <>
@@ -58,17 +61,17 @@ const App: React.FC = () => {
         <main>
           <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-6 shadow-2xl border border-gray-700/50 mb-8 sticky top-4 z-10">
             <div className="flex flex-col gap-4">
+              <div className="relative w-full">
+                <YoutubeIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  placeholder="Paste a YouTube video URL..."
+                  className="w-full pl-10 pr-4 py-3 bg-gray-900/70 border border-gray-600 rounded-lg text-gray-200 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                />
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="relative w-full">
-                  <YoutubeIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={youtubeUrl}
-                    onChange={(e) => setYoutubeUrl(e.target.value)}
-                    placeholder="Paste a YouTube video URL..."
-                    className="w-full pl-10 pr-4 py-3 bg-gray-900/70 border border-gray-600 rounded-lg text-gray-200 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                  />
-                </div>
                  <div className="relative w-full">
                   <KeyIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                   <input
@@ -78,7 +81,20 @@ const App: React.FC = () => {
                     placeholder="Enter YouTube API Key..."
                     className="w-full pl-10 pr-10 py-3 bg-gray-900/70 border border-gray-600 rounded-lg text-gray-200 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
                   />
-                  <button onClick={() => setIsHelpModalOpen(true)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-400" aria-label="Get API Key Help">
+                  <button onClick={() => setIsHelpModalOpen(true)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-400" aria-label="Get YouTube API Key Help">
+                    <InformationCircleIcon className="w-5 h-5" />
+                  </button>
+                </div>
+                 <div className="relative w-full">
+                  <SparklesIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+                  <input
+                    type="password"
+                    value={geminiApiKey}
+                    onChange={(e) => setGeminiApiKey(e.target.value)}
+                    placeholder="Enter Gemini API Key..."
+                    className="w-full pl-10 pr-10 py-3 bg-gray-900/70 border border-gray-600 rounded-lg text-gray-200 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
+                  />
+                  <button onClick={() => setIsGeminiHelpModalOpen(true)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-indigo-400" aria-label="Get Gemini API Key Help">
                     <InformationCircleIcon className="w-5 h-5" />
                   </button>
                 </div>
@@ -155,6 +171,14 @@ const App: React.FC = () => {
                     Get Help
                   </button>
                 )}
+                {error.code === 'GEMINI_INVALID_KEY' && (
+                  <button 
+                    onClick={() => setIsGeminiHelpModalOpen(true)}
+                    className="flex-shrink-0 text-sm bg-red-800/70 hover:bg-red-700 text-white font-semibold py-1 px-3 rounded-md transition-colors"
+                  >
+                    Get Help
+                  </button>
+                )}
               </div>
             )}
             
@@ -201,7 +225,7 @@ const App: React.FC = () => {
                 <SearchIcon className="mx-auto h-12 w-12 text-gray-500" />
                 <h3 className="mt-4 text-lg font-semibold text-white">Ready to Dive In?</h3>
                 <p className="mt-1 text-gray-400">
-                  Paste a YouTube video URL and API Key above to see its comments categorized into topics.
+                  Paste a YouTube video URL and your API Keys above to see its comments categorized into topics.
                 </p>
               </div>
             )}
@@ -238,6 +262,7 @@ const App: React.FC = () => {
       </footer>
     </div>
     <ApiKeyHelpModal isOpen={isHelpModalOpen} onClose={() => setIsHelpModalOpen(false)} />
+    <GeminiApiKeyHelpModal isOpen={isGeminiHelpModalOpen} onClose={() => setIsGeminiHelpModalOpen(false)} />
     <PricingInfoModal isOpen={isPricingModalOpen} onClose={() => setIsPricingModalOpen(false)} />
     </>
   );

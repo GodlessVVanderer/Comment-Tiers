@@ -10,6 +10,7 @@ type NotificationPermission = 'default' | 'granted' | 'denied';
 type AppState = {
   youtubeUrl: string;
   youtubeApiKey: string;
+  geminiApiKey: string;
   maxComments: number;
   analysisPhase: 'idle' | 'fetching' | 'analyzing';
   error: AppError | null;
@@ -17,14 +18,17 @@ type AppState = {
   progress: ProgressUpdate | null;
   analysisStats: AnalysisStats | null;
   isHelpModalOpen: boolean;
+  isGeminiHelpModalOpen: boolean;
   isPricingModalOpen: boolean;
   notificationPermission: NotificationPermission;
 
   // Actions
   setYoutubeUrl: (url: string) => void;
   setYoutubeApiKey: (key: string) => void;
+  setGeminiApiKey: (key: string) => void;
   setMaxComments: (limit: number) => void;
   setIsHelpModalOpen: (isOpen: boolean) => void;
+  setIsGeminiHelpModalOpen: (isOpen: boolean) => void;
   setIsPricingModalOpen: (isOpen: boolean) => void;
   
   checkNotificationPermission: () => void;
@@ -39,6 +43,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Initial state
   youtubeUrl: '',
   youtubeApiKey: '',
+  geminiApiKey: '',
   maxComments: 5000,
   analysisPhase: 'idle',
   error: null,
@@ -46,14 +51,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   progress: null,
   analysisStats: null,
   isHelpModalOpen: false,
+  isGeminiHelpModalOpen: false,
   isPricingModalOpen: false,
   notificationPermission: 'default',
 
   // --- ACTIONS ---
   setYoutubeUrl: (url) => set({ youtubeUrl: url }),
   setYoutubeApiKey: (key) => set({ youtubeApiKey: key }),
+  setGeminiApiKey: (key) => set({ geminiApiKey: key }),
   setMaxComments: (limit) => set({ maxComments: limit }),
   setIsHelpModalOpen: (isOpen) => set({ isHelpModalOpen: isOpen }),
+  setIsGeminiHelpModalOpen: (isOpen) => set({ isGeminiHelpModalOpen: isOpen }),
   setIsPricingModalOpen: (isOpen) => set({ isPricingModalOpen: isOpen }),
 
   checkNotificationPermission: () => {
@@ -101,10 +109,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   analyze: async () => {
-    const { youtubeApiKey, youtubeUrl, maxComments } = get();
+    const { youtubeApiKey, geminiApiKey, youtubeUrl, maxComments } = get();
 
     if (!youtubeApiKey.trim()) {
       set({ error: { code: 'MISSING_KEY', message: 'Please enter your YouTube API key.' } });
+      return;
+    }
+    if (!geminiApiKey.trim()) {
+      set({ error: { code: 'MISSING_GEMINI_KEY', message: 'Please enter your Gemini API key.' } });
       return;
     }
     const videoId = extractVideoId(youtubeUrl);
@@ -158,7 +170,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         });
       };
 
-      const finalStats = await categorizeComments(fetchedComments, targetLanguage, handleUpdate);
+      const finalStats = await categorizeComments(fetchedComments, targetLanguage, handleUpdate, geminiApiKey);
       
       set({ analysisStats: finalStats });
 
@@ -185,9 +197,9 @@ export const useAppStore = create<AppState>((set, get) => ({
                   userFriendlyMessage = 'Could not access comments for this video. This may be due to permission issues or API key restrictions.';
                   break;
               default:
-                  if (e.message.includes('API key is missing')) {
-                      errorCode = 'GEMINI_KEY_MISSING';
-                      userFriendlyMessage = 'The Gemini API key is not configured for this application. Please contact the administrator.';
+                  if (e.message.toLowerCase().includes('api key not valid')) {
+                      errorCode = 'GEMINI_INVALID_KEY';
+                      userFriendlyMessage = 'The provided Gemini API key is invalid or restricted. Please check the key in Google AI Studio.';
                   } else {
                       userFriendlyMessage = e.message;
                   }

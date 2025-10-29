@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import type { Comment, Category, AnalysisStats, ProgressUpdate } from '../types';
 
@@ -100,12 +101,13 @@ const preFilterComments = (comments: Comment[]): Comment[] => {
 export const categorizeComments = async (
   comments: Comment[],
   targetLanguage: string,
-  onUpdate: (newCategories: Category[], progress: ProgressUpdate) => void
+  onUpdate: (newCategories: Category[], progress: ProgressUpdate) => void,
+  userGeminiKey: string
 ): Promise<AnalysisStats> => {
-  if (!process.env.API_KEY) {
-    throw new Error("API key is missing. Please ensure it is configured correctly.");
+  if (!userGeminiKey) {
+    throw new Error("The Gemini API key is missing. Please provide it in the input field.");
   }
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: userGeminiKey });
 
   const filteredComments = preFilterComments(comments);
 
@@ -156,13 +158,14 @@ export const categorizeComments = async (
           config: {
             responseMimeType: 'application/json',
             responseSchema: responseSchema,
+            // FIX: `safetySettings` is a model configuration parameter and must be nested inside the `config` object.
+            safetySettings: [
+                { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            ]
           },
-          safetySettings: [
-              { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-              { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-              { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-              { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-          ]
         });
 
         const jsonText = response.text.trim();
