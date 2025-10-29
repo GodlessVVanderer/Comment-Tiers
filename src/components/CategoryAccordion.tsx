@@ -1,182 +1,81 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import type { Category, Comment } from '../types';
-import { CommentCard } from './CommentCard';
-import { ChevronDownIcon, ChatBubbleIcon, PlusCircleIcon, MagnifyingGlassIcon, SendIcon } from './Icons';
 
-interface CategoryAccordionProps {
+import React, { useState } from 'react';
+import type { Category } from '../types';
+import { ChevronDownIcon, ChatBubbleIcon } from './Icons';
+import { CommentCard } from './CommentCard';
+
+interface CategoryAccordionItemProps {
   category: Category;
-  isLoading?: boolean;
-  isInitiallyOpen?: boolean;
-  onAddReply: (categoryTitle: string, path: number[], newReplyText: string) => void;
-  onAddComment: (categoryTitle: string, newCommentText: string) => void;
-  onEditComment: (categoryTitle: string, path: number[], newText: string) => void;
+  isOpen: boolean;
+  onToggle: () => void;
+  onAddReply: (path: number[], newReplyText: string) => void;
+  onEditComment: (path: number[], newText: string) => void;
 }
 
-const INITIAL_VISIBLE_COUNT = 10;
-const LOAD_MORE_INCREMENT = 15;
-
-export const CategoryAccordion: React.FC<CategoryAccordionProps> = ({ 
-  category, 
-  isLoading = false, 
-  isInitiallyOpen = false,
-  onAddReply,
-  onAddComment,
-  onEditComment
-}) => {
-  const [isOpen, setIsOpen] = useState(isInitiallyOpen);
-  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
-  const [filterText, setFilterText] = useState('');
-  const [isAddingComment, setIsAddingComment] = useState(false);
-  const [newCommentText, setNewCommentText] = useState('');
-
-  useEffect(() => {
-    // Reset state when the accordion is closed.
-    if (!isOpen) {
-      setVisibleCount(INITIAL_VISIBLE_COUNT);
-      setFilterText('');
-      setIsAddingComment(false);
-      setNewCommentText('');
-    }
-  }, [isOpen]);
-
-  const handleReply = (path: number[], newReplyText: string) => {
-    onAddReply(category.categoryTitle, path, newReplyText);
-  };
-
-  const handleEdit = (path: number[], newText: string) => {
-    onEditComment(category.categoryTitle, path, newText);
-  };
-
-  const handlePostComment = () => {
-    if (newCommentText.trim()) {
-      onAddComment(category.categoryTitle, newCommentText.trim());
-      setNewCommentText('');
-      setIsAddingComment(false);
-    }
-  };
-
-  const comments = category.comments || [];
-
-  const filteredComments = useMemo(() => {
-    if (!filterText.trim()) {
-      return comments;
-    }
-    const lowercasedFilter = filterText.toLowerCase();
-    return comments.filter(comment => 
-      comment.author.toLowerCase().includes(lowercasedFilter) ||
-      comment.text.toLowerCase().includes(lowercasedFilter)
-    );
-  }, [comments, filterText]);
-
-  const visibleComments = filteredComments.slice(0, visibleCount);
-
+const CategoryAccordionItem: React.FC<CategoryAccordionItemProps> = ({ category, isOpen, onToggle, onAddReply, onEditComment }) => {
   return (
-    <div className="bg-gray-800/50 border border-gray-700 rounded-lg shadow-lg overflow-hidden transition-all duration-300">
+    <div className="border border-gray-700/80 rounded-lg overflow-hidden bg-gray-800/60 shadow-md">
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex justify-between items-center p-4 text-left bg-gray-800 hover:bg-gray-700/50 transition-colors duration-200"
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-4 text-left focus:outline-none focus:bg-gray-700/50 transition-colors"
       >
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold text-indigo-300">{category.categoryTitle}</h3>
-          <p className="text-sm text-gray-400 mt-1">{category.summary}</p>
+        <div className="flex items-center flex-grow min-w-0">
+          <ChatBubbleIcon className="w-5 h-5 mr-3 text-indigo-400 flex-shrink-0" />
+          <div className="flex-grow min-w-0">
+            <h3 className="font-semibold text-white truncate">{category.categoryTitle}</h3>
+            <p className="text-sm text-gray-400 mt-1">{category.summary}</p>
+          </div>
         </div>
-        <div className="flex items-center gap-4 ml-4">
-            <div className="flex items-center gap-2 text-sm text-gray-400">
-                <ChatBubbleIcon className="w-4 h-4" />
-                <span>{isLoading ? '...' : comments.length}</span>
-            </div>
-            <ChevronDownIcon className={`w-6 h-6 text-gray-400 transform transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+        <div className="flex items-center ml-4 flex-shrink-0">
+          <span className="text-sm font-bold text-gray-300 bg-gray-700/80 px-2.5 py-1 rounded-full">{category.comments.length}</span>
+          <ChevronDownIcon className={`w-5 h-5 text-gray-400 ml-3 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} />
         </div>
       </button>
-      
-      <div
-        className={`transition-all duration-500 ease-in-out ${
-          isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-        }`}
-        style={{ display: 'grid' }}
-      >
-        <div className="overflow-hidden">
-            <div className="p-4 bg-gray-900/50">
-              <div className="relative mb-4">
-                <input
-                  type="text"
-                  value={filterText}
-                  onChange={(e) => {
-                    setFilterText(e.target.value);
-                    setVisibleCount(INITIAL_VISIBLE_COUNT);
-                  }}
-                  placeholder="Filter comments by keyword..."
-                  className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-600 rounded-lg text-gray-200 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-200"
-                />
-                <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-              </div>
-
-              <div className="mb-4">
-                <button
-                  onClick={() => setIsAddingComment(!isAddingComment)}
-                  className="inline-flex items-center gap-2 text-sm text-indigo-300 hover:text-indigo-200 transition-colors"
-                >
-                  <PlusCircleIcon className="w-5 h-5" />
-                  Add a comment to this category
-                </button>
-                {isAddingComment && (
-                  <div className="mt-2 flex items-start gap-2">
-                    <textarea
-                      value={newCommentText}
-                      onChange={(e) => setNewCommentText(e.target.value)}
-                      placeholder="Share your thoughts..."
-                      rows={3}
-                      className="w-full flex-grow px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-sm text-gray-200 placeholder-gray-500 focus:ring-1 focus:ring-indigo-500"
-                    />
-                    <button
-                      onClick={handlePostComment}
-                      disabled={!newCommentText.trim()}
-                      className="flex-shrink-0 p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed"
-                      aria-label="Post Comment"
-                    >
-                      <SendIcon className="w-5 h-5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {isLoading ? (
-                <div className="flex items-center justify-center text-gray-400 h-24">
-                  Loading...
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {visibleComments.length > 0 ? (
-                    visibleComments.map((comment, index) => (
-                      <CommentCard 
-                        key={comment.id} 
-                        comment={comment} 
-                        path={[comments.findIndex(c => c.id === comment.id)]}
-                        onAddReply={handleReply}
-                        onEditComment={handleEdit}
-                      />
-                    ))
-                  ) : (
-                    <p className="text-center text-gray-500 py-4">
-                      {filterText ? 'No comments match your filter.' : 'No comments in this category.'}
-                    </p>
-                  )}
-                   {filteredComments.length > visibleCount && (
-                    <div className="pt-2 text-center">
-                      <button
-                        onClick={() => setVisibleCount(prev => prev + LOAD_MORE_INCREMENT)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700/50 text-indigo-300 text-sm font-medium rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 focus:ring-indigo-500"
-                      >
-                        <PlusCircleIcon className="w-5 h-5" />
-                        Load More ({filteredComments.length - visibleCount} remaining)
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+      {isOpen && (
+        <div className="p-4 bg-gray-900/50 border-t border-gray-700/80">
+          <div className="space-y-4">
+            {category.comments.map((comment, index) => (
+              <CommentCard 
+                key={comment.id} 
+                comment={comment}
+                path={[index]} // Path for this top-level comment in the category
+                onAddReply={onAddReply}
+                onEditComment={onEditComment}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
+};
+
+
+interface CategoryListProps {
+    categories: Category[];
+    onAddReply: (categoryIndex: number, path: number[], newReplyText: string) => void;
+    onEditComment: (categoryIndex: number, path: number[], newText: string) => void;
+}
+
+export const CategoryAccordion: React.FC<CategoryListProps> = ({ categories, onAddReply, onEditComment }) => {
+    const [openCategoryIndex, setOpenCategoryIndex] = useState<number | null>(0);
+
+    const handleToggle = (index: number) => {
+        setOpenCategoryIndex(openCategoryIndex === index ? null : index);
+    };
+
+    return (
+        <div className="space-y-3">
+            {categories.map((category, index) => (
+                <CategoryAccordionItem
+                    key={`${category.categoryTitle}-${index}`}
+                    category={category}
+                    isOpen={openCategoryIndex === index}
+                    onToggle={() => handleToggle(index)}
+                    onAddReply={(path, text) => onAddReply(index, path, text)}
+                    onEditComment={(path, text) => onEditComment(index, path, text)}
+                />
+            ))}
+        </div>
+    );
 };

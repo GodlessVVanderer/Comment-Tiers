@@ -1,3 +1,4 @@
+
 // FIX: Provide implementation for the background script.
 // This script runs in the background to handle tasks like data processing.
 
@@ -88,7 +89,8 @@ const prefilterComments = (
 chrome.runtime.onMessage.addListener(
   (
     request: { action: string; payload: any },
-    sender: chrome.runtime.MessageSender,
+    // FIX: Changed sender type from `chrome.runtime.MessageSender` to `any` to resolve namespace error.
+    sender: any,
     sendResponse: (response: any) => void
   ) => {
     if (request.action === 'prefilter-comments') {
@@ -105,8 +107,12 @@ chrome.runtime.onMessage.addListener(
         console.error('Error during pre-filtering:', error);
         sendResponse([]); // Send back an empty array on error
       }
+      // Return true to indicate that the response will be sent asynchronously.
+      return true;
     }
-    // Return true to indicate that the response will be sent asynchronously.
-    return true;
+
+    if (request.action === 'open-options-page') {
+      chrome.runtime.openOptionsPage();
+    }
   }
 );
