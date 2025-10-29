@@ -52,7 +52,7 @@ export const useAppStore = create<AppState>((set, get) => ({
           parentComment = parentComment.replies![index];
         });
         if (!parentComment.replies) parentComment.replies = [];
-        parentComment.replies.push({
+        parentComment.replies.unshift({
           id: `reply-${Date.now()}`,
           author: 'You',
           text: newReplyText

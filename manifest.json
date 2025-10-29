@@ -8,7 +8,8 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Comment Tiers Settings",
+    "default_popup": "index.html",
+    "default_title": "Comment Tiers",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
