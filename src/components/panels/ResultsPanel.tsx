@@ -1,70 +1,45 @@
-
 import React from 'react';
-import { useAppStore } from '../../store';
-import { StatsCard } from '../StatsCard';
-import { CategoryAccordion } from '../CategoryAccordion';
-import { formatDuration } from '../../utils';
-import {
-  ChatBubbleBottomCenterTextIcon,
-  ClockIcon,
-  HeartIcon,
-  MagnifyingGlassIcon,
-} from '../Icons';
-import { ExportControls } from '../ExportControls';
-import { DonationCTA } from '../DonationCTA';
-import { LiveConversation } from '../LiveConversation';
+import { AnalysisResults } from '../../types';
+import CategoryAccordion from '../CategoryAccordion';
+import StatsCard from '../StatsCard';
+import ExportControls from '../ExportControls';
 
-export const ResultsPanel: React.FC = () => {
-  const { results, stats, analyze, videoId } = useAppStore();
+interface ResultsPanelProps {
+  results: AnalysisResults;
+  onReset: () => void;
+}
 
-  const handleReanalyze = () => {
-    if (videoId) {
-        analyze(videoId);
-    }
-  };
-
-  if (!stats) return null;
-
+const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, onReset }) => {
   return (
-    <div className="mt-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <StatsCard
-          label="Comments Fetched"
-          value={stats.totalCommentsFetched}
-          icon={<MagnifyingGlassIcon className="w-6 h-6" />}
-        />
-        <StatsCard
-          label="Comments Analyzed"
-          value={stats.totalCommentsAnalyzed}
-          icon={<ChatBubbleBottomCenterTextIcon className="w-6 h-6" />}
-        />
-        <StatsCard
-          label="Total Likes"
-          value={stats.totalLikesOnAnalyzedComments}
-          icon={<HeartIcon className="w-6 h-6" />}
-        />
-        <StatsCard
-          label="Analysis Time"
-          value={formatDuration(stats.analysisDurationSeconds)}
-          icon={<ClockIcon className="w-6 h-6" />}
-        />
+    <div>
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <h3 className="text-lg font-bold">Analysis Complete</h3>
+          <p className="text-gray-400 mt-1">{results.summary}</p>
+        </div>
+        <button
+          onClick={onReset}
+          className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md flex-shrink-0 ml-4"
+        >
+          Analyze Again
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <StatsCard title="Positive" value={`${results.sentiment.positive}%`} color="text-green-400" />
+        <StatsCard title="Negative" value={`${results.sentiment.negative}%`} color="text-red-400" />
+        <StatsCard title="Neutral" value={`${results.sentiment.neutral}%`} color="text-yellow-400" />
       </div>
 
       <div className="space-y-2">
-        {results.map((category) => (
-          <CategoryAccordion key={category.name} category={category} />
+        {results.categories.map((category) => (
+          <CategoryAccordion key={category.category} category={category} />
         ))}
       </div>
       
-      <ExportControls />
-      <LiveConversation />
-      <DonationCTA />
-
-       <div className="mt-6 text-center">
-         <button onClick={handleReanalyze} className="text-sm text-gray-400 hover:text-white hover:underline">
-            Analyze again with different settings
-         </button>
-       </div>
+      <ExportControls results={results} />
     </div>
   );
 };
+
+export default ResultsPanel;

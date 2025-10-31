@@ -1,46 +1,21 @@
 import React from 'react';
-import { useAppStore } from '../../store';
-import { COMMENT_LIMIT_OPTIONS } from '../../constants';
-import { WandIcon } from '../Icons';
 
-export const IdlePanel = () => {
-  const { commentLimit, setCommentLimit, analyze, videoId } = useAppStore();
+interface IdlePanelProps {
+  onAnalyze: () => void;
+}
 
-  const handleAnalyzeClick = () => {
-    if (videoId) {
-      analyze(videoId);
-    }
-  };
-
+const IdlePanel: React.FC<IdlePanelProps> = ({ onAnalyze }) => {
   return (
-    <div className="mt-4">
-      <div className="mb-4">
-        <label
-          htmlFor="comment-limit"
-          className="block text-sm font-medium text-gray-400 mb-1"
-        >
-          Analyze up to:
-        </label>
-        <select
-          id="comment-limit"
-          value={commentLimit}
-          onChange={(e) => setCommentLimit(Number(e.target.value))}
-          className="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500"
-        >
-          {COMMENT_LIMIT_OPTIONS.map((limit) => (
-            <option key={limit} value={limit}>
-              {limit.toLocaleString()} comments
-            </option>
-          ))}
-        </select>
-      </div>
+    <div className="text-center p-8">
+      <p className="mb-4">Click the button to analyze comments from this video.</p>
       <button
-        onClick={handleAnalyzeClick}
-        className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition-colors"
+        onClick={onAnalyze}
+        className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-md"
       >
-        <WandIcon className="w-5 h-5" />
         Analyze Comments
       </button>
     </div>
   );
 };
+
+export default IdlePanel;

@@ -1,43 +1,41 @@
-
 import React, { useState } from 'react';
-import { Category } from '../types';
-import { ChevronDownIcon, ChatBubbleBottomCenterTextIcon } from './Icons';
-import { CommentCard } from './CommentCard';
+import { CommentCategory } from '../types';
+import CommentCard from './CommentCard';
+import { ChevronDownIcon, ChevronUpIcon } from './Icons';
 
 interface CategoryAccordionProps {
-  category: Category;
+  category: CommentCategory;
 }
 
-export const CategoryAccordion: React.FC<CategoryAccordionProps> = ({ category }) => {
+const CategoryAccordion: React.FC<CategoryAccordionProps> = ({ category }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <div className="bg-gray-800/50 border border-gray-700 rounded-lg">
+    <div className="bg-gray-700 rounded-lg">
       <button
-        className="w-full flex justify-between items-center p-4 text-left"
         onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex justify-between items-center p-4 text-left"
       >
-        <div>
-          <h3 className="font-semibold text-white">{category.name}</h3>
-          <p className="text-sm text-gray-400 mt-1">{category.summary}</p>
+        <div className="flex items-center">
+          <h4 className="font-bold text-lg">{category.category}</h4>
+          <span className="ml-2 bg-gray-600 text-xs font-semibold px-2 py-1 rounded-full">
+            {category.comments.length}
+          </span>
         </div>
-        <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1 text-sm text-gray-400">
-                <ChatBubbleBottomCenterTextIcon className="w-4 h-4" />
-                {category.comments.length}
-            </div>
-            <ChevronDownIcon
-                className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-            />
-        </div>
+        {isOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
       </button>
       {isOpen && (
-        <div className="px-4 pb-2 divide-y divide-gray-700">
-          {category.comments.map((comment) => (
-            <CommentCard key={comment.id} comment={comment} />
-          ))}
+        <div className="p-4 border-t border-gray-600">
+          <p className="text-gray-400 italic mb-4">{category.summary}</p>
+          <div className="space-y-4">
+            {category.comments.map((comment) => (
+              <CommentCard key={comment.id} comment={comment} />
+            ))}
+          </div>
         </div>
       )}
     </div>
   );
 };
+
+export default CategoryAccordion;

@@ -1,157 +1,96 @@
+import { GoogleGenAI, Type } from "@google/genai";
+import { Comment, AnalysisResults, CommentCategory } from '../types';
+import { GEMINI_MODEL } from '../constants';
 
-import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from '@google/genai';
-import { AnalysisResult } from '../types';
-import { GEMINI_BATCH_SIZE, GEMINI_CONCURRENCY_LIMIT } from '../constants';
+export async function analyzeComments(comments: Comment[], apiKey: string): Promise<AnalysisResults> {
+  // Fix: Correctly initialize GoogleGenAI with a named apiKey object.
+  const ai = new GoogleGenAI({apiKey});
 
-const responseSchema = {
+  const prompt = `
+    Analyze the following YouTube comments for the video. Your task is to provide a comprehensive analysis.
+
+    1.  **Overall Summary**: Write a brief, neutral summary of the general sentiment and main topics discussed in the comments.
+    2.  **Categorization**: Group the comments into relevant categories such as "Questions", "Positive Feedback", "Negative Feedback", "Suggestions", and "Off-topic/Spam". For each category, provide a short summary and include the original comments that fall into that category. Pass through all original comment fields.
+    3.  **Sentiment Analysis**: Calculate the overall sentiment distribution as percentages for positive, negative, and neutral comments. The total should add up to 100.
+
+    Here are the comments:
+    ${JSON.stringify(comments)}
+  `;
+
+  const responseSchema = {
     type: Type.OBJECT,
     properties: {
-        categories: {
-            type: Type.ARRAY,
-            items: {
+      summary: {
+        type: Type.STRING,
+        description: "A general summary of all comments."
+      },
+      categories: {
+        type: Type.ARRAY,
+        description: "Categorized comments.",
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            category: { type: Type.STRING, description: "e.g., 'Positive Feedback', 'Questions', etc." },
+            summary: { type: Type.STRING, description: "A summary for this category." },
+            comments: {
+              type: Type.ARRAY,
+              description: "The comments belonging to this category.",
+              items: {
                 type: Type.OBJECT,
                 properties: {
-                    name: { type: Type.STRING },
-                    summary: { type: Type.STRING },
-                    comments: {
-                        type: Type.ARRAY,
-                        items: { type: Type.STRING },
-                    },
+                  id: { type: Type.STRING },
+                  author: { type: Type.STRING },
+                  text: { type: Type.STRING },
+                  likeCount: { type: Type.INTEGER },
+                  publishedAt: { type: Type.STRING },
+                  authorProfileImageUrl: { type: Type.STRING },
                 },
-                required: ['name', 'summary', 'comments'],
-            },
+                required: ["id", "author", "text", "likeCount", "publishedAt", "authorProfileImageUrl"],
+              }
+            }
+          },
+          required: ["category", "summary", "comments"],
+        }
+      },
+      sentiment: {
+        type: Type.OBJECT,
+        description: "Overall sentiment analysis as percentages.",
+        properties: {
+          positive: { type: Type.NUMBER, description: "Percentage of positive comments (0-100)." },
+          negative: { type: Type.NUMBER, description: "Percentage of negative comments (0-100)." },
+          neutral: { type: Type.NUMBER, description: "Percentage of neutral comments (0-100)." },
         },
+        required: ["positive", "negative", "neutral"],
+      }
     },
-    required: ['categories'],
-};
+    required: ["summary", "categories", "sentiment"],
+  };
 
-const runConcurrent = <T, R>(
-    tasks: T[],
-    taskFn: (task: T) => Promise<R>,
-    concurrencyLimit: number
-): Promise<R[]> => {
-    const results: R[] = [];
-    let running = 0;
-    let taskIndex = 0;
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: responseSchema,
+      temperature: 0.2,
+    },
+  });
 
-    return new Promise((resolve, reject) => {
-        const run = () => {
-            if (taskIndex >= tasks.length && running === 0) {
-                return resolve(results);
-            }
+  try {
+    const text = response.text.trim();
+    const parsedJson = JSON.parse(text);
 
-            while (running < concurrencyLimit && taskIndex < tasks.length) {
-                running++;
-                const currentTaskIndex = taskIndex++;
-                taskFn(tasks[currentTaskIndex])
-                    .then(result => {
-                        results[currentTaskIndex] = result;
-                    })
-                    .catch(reject)
-                    .finally(() => {
-                        running--;
-                        run();
-                    });
-            }
-        };
-        run();
-    });
-};
-
-export const analyzeComments = async (
-    comments: string[],
-    apiKey: string,
-    onUpdate: (processed: number) => void,
-    userLanguage: string
-): Promise<AnalysisResult> => {
-    const ai = new GoogleGenAI({ apiKey });
-
-    const batches: string[][] = [];
-    for (let i = 0; i < comments.length; i += GEMINI_BATCH_SIZE) {
-        batches.push(comments.slice(i, i + GEMINI_BATCH_SIZE));
-    }
-
-    let processedCount = 0;
-
-    const processBatch = async (batch: string[]): Promise<AnalysisResult> => {
-        const prompt = `You are a YouTube comment analysis expert. I will provide you with a JSON array of comments in various languages.
-Your task is to analyze them and categorize them into 5-7 insightful themes or topics.
-For each theme, provide a concise one-sentence summary and a list of the exact original comment strings that belong to that theme.
-Do not create categories for spam, promotions, or generic comments like "first!". Focus on substantive discussion.
-
-IMPORTANT: The final output for category names and summaries MUST be translated into the following language: ${userLanguage}.
-The comment strings inside the 'comments' array must remain in their original, untranslated form.
-
-Here are the comments:
-${JSON.stringify(batch)}
-
-Respond with a valid JSON object only, matching the specified schema. Do not include any other text or markdown formatting.`;
-        
-        try {
-            // FIX: Moved safetySettings inside the config object to align with the API.
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-                config: {
-                    responseMimeType: 'application/json',
-                    responseSchema: responseSchema,
-                    // @ts-ignore
-                    safetySettings: [
-                        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-                        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-                    ]
-                },
-            });
-
-            const jsonText = response.text.trim() ?? '';
-            if (!jsonText) {
-                return { categories: [] };
-            }
-            const result = JSON.parse(jsonText);
-            
-            processedCount += batch.length;
-            onUpdate(processedCount);
-
-            return result;
-        } catch (error: any) {
-            console.error('Error analyzing batch with Gemini:', error);
-            if (error.message.includes('API key not valid')) {
-                throw new Error('GEMINI_INVALID_KEY');
-            }
-            if (error.message.includes('quota')) {
-                throw new Error('GEMINI_QUOTA_EXCEEDED');
-            }
-            throw new Error('GEMINI_API_ERROR');
-        }
-    };
+    const commentsById = new Map(comments.map(c => [c.id, c]));
     
-    const batchResults = await runConcurrent(batches, processBatch, GEMINI_CONCURRENCY_LIMIT);
-
-    const mergedResult: AnalysisResult = { categories: [] };
-    const categoryMap = new Map<string, { summary: string; comments: string[] }>();
-
-    for (const result of batchResults) {
-        if (result && result.categories) {
-            for (const category of result.categories) {
-                if (categoryMap.has(category.name)) {
-                    const existing = categoryMap.get(category.name)!;
-                    existing.comments.push(...category.comments);
-                } else {
-                    categoryMap.set(category.name, { summary: category.summary, comments: category.comments });
-                }
-            }
-        }
-    }
-
-    categoryMap.forEach((value, key) => {
-        mergedResult.categories.push({
-            name: key,
-            summary: value.summary,
-            comments: value.comments,
-        });
+    parsedJson.categories.forEach((category: CommentCategory) => {
+        category.comments = category.comments
+            .map((comment: any) => commentsById.get(comment.id))
+            .filter((c): c is Comment => c !== undefined);
     });
 
-    return mergedResult;
-};
+    return parsedJson as AnalysisResults;
+  } catch (e) {
+    console.error("Failed to parse Gemini response:", e, "Raw response:", response.text);
+    throw new Error("Could not parse the analysis from the AI. The response might be malformed.");
+  }
+}

@@ -1,44 +1,32 @@
-// FIX: Add chrome type declaration to fix build errors due to missing @types/chrome.
-declare const chrome: any;
-
 import React from 'react';
-import { useAppStore } from '../../store';
 
-export const ErrorPanel = () => {
-  const { error, analyze, videoId } = useAppStore();
+interface ErrorPanelProps {
+  error: string | null;
+  onRetry: () => void;
+  onReset: () => void;
+}
 
-  const handleRetry = () => {
-    if (videoId) {
-      analyze(videoId);
-    }
-  };
-
-  const openOptions = () => {
-    chrome.runtime.sendMessage({ action: 'open-options-page' });
-  };
-  
+const ErrorPanel: React.FC<ErrorPanelProps> = ({ error, onRetry, onReset }) => {
   return (
-    <div className="mt-6 text-center p-4 bg-red-900/30 border border-red-700 rounded-lg">
-      <h3 className="font-semibold text-red-300">Analysis Failed</h3>
-      <p className="text-sm text-red-200 mt-1">
-        {error?.message || 'An unknown error occurred.'}
-      </p>
-      <div className="flex justify-center gap-2 mt-4">
+    <div className="text-center p-4 bg-red-900 bg-opacity-50 border border-red-700 rounded-md">
+      <h3 className="text-lg font-bold text-red-300">An Error Occurred</h3>
+      <p className="text-red-400 my-2">{error || 'An unknown error occurred.'}</p>
+      <div className="flex justify-center gap-4 mt-4">
         <button
-          onClick={handleRetry}
-          className="px-3 py-1 text-sm bg-gray-600 hover:bg-gray-500 rounded"
+          onClick={onRetry}
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md"
         >
           Retry
         </button>
-        {(error?.code.includes('KEY') || error?.code.includes('QUOTA')) && (
-            <button
-            onClick={openOptions}
-            className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-500 rounded"
-          >
-            Check API Keys
-          </button>
-        )}
+        <button
+          onClick={onReset}
+          className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md"
+        >
+          Back
+        </button>
       </div>
     </div>
   );
 };
+
+export default ErrorPanel;

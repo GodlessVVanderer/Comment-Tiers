@@ -1,104 +1,53 @@
-// FIX: Add chrome type declaration to fix build errors due to missing @types/chrome.
-declare const chrome: any;
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { App } from './App';
-import { INJECTION_ROOT_ID } from './constants';
-import { useAppStore } from './store';
-import styles from './style.css?inline';
+import App from './App';
+import './style.css';
 
-let root: ReactDOM.Root | null = null;
-let container: HTMLDivElement | null = null;
-let currentVideoId: string | null = null;
-
-const mountApp = (target: Element, videoId: string) => {
-  if (container) return; // Already mounted
-
-  container = document.createElement('div');
-  container.id = INJECTION_ROOT_ID;
-  target.parentElement?.insertBefore(container, target);
-
-  const shadowRoot = container.attachShadow({ mode: 'open' });
-  const appRoot = document.createElement('div');
-  shadowRoot.appendChild(appRoot);
-
-  const styleSheet = document.createElement('style');
-  styleSheet.textContent = styles;
-  shadowRoot.appendChild(styleSheet);
-  
-  root = ReactDOM.createRoot(appRoot);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
-  
-  useAppStore.getState().initialize(videoId);
-};
-
-const unmountApp = () => {
-  if (root) {
-    root.unmount();
-    root = null;
-  }
-  if (container) {
-    container.remove();
-    container = null;
-  }
-  useAppStore.getState().reset();
-};
-
-const observer = new MutationObserver(() => {
-  const urlParams = new URLSearchParams(window.location.search);
-  const videoIdOnPage = urlParams.get('v');
-  
-  if (videoIdOnPage !== currentVideoId) {
-    currentVideoId = videoIdOnPage;
-    unmountApp(); // Unmount on navigation
-  }
-
-  const commentsElement = document.querySelector('#comments');
-
-  if (commentsElement && currentVideoId) {
-    if (!container) { // If app is not on page, mount it
-      mountApp(commentsElement, currentVideoId);
+const injectApp = () => {
+    const existingRoot = document.getElementById('youtube-comment-analyzer-root');
+    if (existingRoot) {
+        return; // App already injected
     }
-  } else {
-    if (container) { // If app is on page but shouldn't be, unmount it
-      unmountApp();
-    }
-  }
-});
 
-const startObserver = () => {
-    observer.observe(document.body, { childList: true, subtree: true });
+    const container = document.createElement('div');
+    container.id = 'youtube-comment-analyzer-root';
+
+    // This selector targets the area above the comments section on YouTube.
+    // It might need updates if YouTube changes its page structure.
+    const pivot = document.querySelector('#comments');
+    if (pivot) {
+        pivot.before(container);
+        const root = ReactDOM.createRoot(container);
+        root.render(
+            <React.StrictMode>
+                <App />
+            </React.StrictMode>
+        );
+    } else {
+        console.warn("Comment Analyzer: Could not find YouTube comments section to attach to.");
+    }
 };
 
-const retryInjection = (retries = 20, delay = 500) => {
-  const commentsElement = document.querySelector('#comments');
-  currentVideoId = new URLSearchParams(window.location.search).get('v');
 
-  if (commentsElement && currentVideoId) {
-    mountApp(commentsElement, currentVideoId);
-    startObserver();
-  } else if (retries > 0) {
-    setTimeout(() => retryInjection(retries - 1, delay), delay);
-  } else {
-    console.error('[Comment Tiers] Could not find YouTube comments section to inject into after 10 seconds.');
-    chrome.runtime.sendMessage({ action: 'injection-failed' });
-  }
-};
+// Initial injection
+injectApp();
 
-// Listen for messages from options page
-chrome.runtime.onMessage.addListener(async (request) => {
-    if (request.action === 'keys-updated') {
-        const videoId = new URLSearchParams(window.location.search).get('v');
-        // Re-hydrate the store to get the new keys
-        await useAppStore.persist.rehydrate();
-        useAppStore.getState().initialize(videoId);
+// YouTube uses a lot of dynamic navigation (SPA). We need to re-inject the app on navigation.
+// We can use a MutationObserver on the body or a more specific element,
+// but for simplicity, we'll listen for a custom event or use an interval.
+// A more robust solution would observe URL changes.
+
+let lastUrl = location.href; 
+new MutationObserver(() => {
+  const url = location.href;
+  if (url !== lastUrl) {
+    lastUrl = url;
+    // URL changed, we might be on a new video page.
+    const existingRoot = document.getElementById('youtube-comment-analyzer-root');
+    if (existingRoot) {
+        existingRoot.remove();
     }
-});
-
-
-retryInjection();
+    // Attempt to inject again after a short delay to allow the page to render.
+    setTimeout(injectApp, 1000);
+  }
+}).observe(document.body, {subtree: true, childList: true});

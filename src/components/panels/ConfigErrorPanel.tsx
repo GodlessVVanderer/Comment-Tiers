@@ -1,28 +1,20 @@
-// FIX: Add chrome type declaration to fix build errors due to missing @types/chrome.
-declare const chrome: any;
-
 import React from 'react';
-import { useAppStore } from '../../store';
 
-export const ConfigErrorPanel = () => {
-  const { configError } = useAppStore();
-
-  const openOptions = () => {
-    chrome.runtime.sendMessage({ action: 'open-options-page' });
-  };
-
+const ConfigErrorPanel = () => {
   return (
-    <div className="mt-6 text-center p-4 bg-yellow-900/30 border border-yellow-700 rounded-lg">
-      <h3 className="font-semibold text-yellow-300">Configuration Required</h3>
-      <p className="text-sm text-yellow-200 mt-1">
-        {configError || 'Please set your API keys in the extension options.'}
+    <div className="text-center p-4 bg-yellow-900 bg-opacity-50 border border-yellow-700 rounded-md">
+      <h3 className="text-lg font-bold text-yellow-300">Configuration Error</h3>
+      <p className="text-yellow-400 my-2">
+        Please set your YouTube and Gemini API keys in the extension settings.
       </p>
       <button
-        onClick={openOptions}
-        className="mt-4 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-md transition-colors"
+        onClick={() => chrome.runtime.sendMessage({ action: 'openOptionsPage' })}
+        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md mt-2"
       >
         Open Settings
       </button>
     </div>
   );
 };
+
+export default ConfigErrorPanel;

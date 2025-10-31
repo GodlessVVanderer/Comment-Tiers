@@ -1,22 +1,18 @@
 import React from 'react';
-import { formatNumber } from '../utils';
 
 interface StatsCardProps {
-  label: string;
-  value: number | string;
-  icon?: React.ReactNode;
+  title: string;
+  value: string;
+  color: string;
 }
 
-export const StatsCard: React.FC<StatsCardProps> = ({ label, value, icon }) => {
+const StatsCard: React.FC<StatsCardProps> = ({ title, value, color }) => {
   return (
-    <div className="bg-gray-800 p-4 rounded-lg flex items-center">
-      {icon && <div className="mr-4 text-blue-400">{icon}</div>}
-      <div>
-        <div className="text-sm text-gray-400">{label}</div>
-        <div className="text-2xl font-bold text-white">
-          {typeof value === 'number' ? formatNumber(value) : value}
-        </div>
-      </div>
+    <div className="bg-gray-700 p-4 rounded-lg text-center">
+      <p className="text-sm text-gray-400">{title}</p>
+      <p className={`text-2xl font-bold ${color}`}>{value}</p>
     </div>
   );
 };
+
+export default StatsCard;

@@ -1,36 +1,13 @@
 import React from 'react';
-import { useAppStore } from '../../store';
-import { LoaderIcon } from '../Icons';
+import { LoadingSpinner } from '../Icons';
 
-const statusMessages: Record<string, string> = {
-  fetching: 'Fetching comments from YouTube...',
-  filtering: 'Filtering out spam and irrelevant comments...',
-  analyzing: 'Analyzing comments with AI...',
-};
-
-export const LoadingPanel = () => {
-  const { status, progress } = useAppStore();
-
-  const percentage =
-    progress.total > 0
-      ? Math.round((progress.processed / progress.total) * 100)
-      : 0;
-
+const LoadingPanel = () => {
   return (
-    <div className="mt-6 text-center">
-      <div className="flex justify-center items-center mb-4">
-        <LoaderIcon className="w-8 h-8 text-blue-400 animate-spin" />
-      </div>
-      <p className="text-white font-semibold">{statusMessages[status]}</p>
-      <div className="w-full bg-gray-700 rounded-full h-2.5 mt-2">
-        <div
-          className="bg-blue-600 h-2.5 rounded-full"
-          style={{ width: `${percentage}%` }}
-        ></div>
-      </div>
-      <p className="text-sm text-gray-400 mt-1">
-        {progress.processed.toLocaleString()} / {progress.total.toLocaleString()}
-      </p>
+    <div className="flex flex-col items-center justify-center p-8">
+      <LoadingSpinner className="w-12 h-12 mb-4" />
+      <p className="text-lg">Analyzing comments... this may take a moment.</p>
     </div>
   );
 };
+
+export default LoadingPanel;
