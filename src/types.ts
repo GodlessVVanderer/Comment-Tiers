@@ -1,62 +1,49 @@
-// This is a placeholder for types.ts
-// In a real application, you would define your types here.
-// For example:
-// export interface YouTubeComment { ... }
 
-export interface YouTubeComment {
+export interface Comment {
   id: string;
+  text: string;
   author: string;
   authorProfileImageUrl: string;
-  text: string;
-  publishedAt: string;
   likeCount: number;
-  replyCount: number;
-}
-
-export interface Comment extends YouTubeComment {
+  publishedAt: string;
   replies?: Comment[];
-  timestamp?: number;
-  isEditable?: boolean;
 }
 
 export interface Category {
   name: string;
-  icon: string;
-  prompt: string;
+  summary: string;
   comments: Comment[];
 }
 
-export interface AnalysisStats {
-  totalComments: number;
-  filteredComments: number;
-  analyzedComments: number;
-}
-
 export interface AnalysisResult {
-  summary: string;
-  stats: AnalysisStats;
-  categories: Category[];
-  topComments: Comment[];
+  categories: {
+    name: string;
+    summary: string;
+    comments: string[];
+  }[];
 }
 
-export interface ProgressUpdate {
-  percentage: number;
-  batch?: number;
-  totalBatches?: number;
-  etaSeconds?: number;
-  eta?: string;
+export interface AnalysisStats {
+  totalCommentsFetched: number;
+  totalCommentsAnalyzed: number;
+  analysisDurationSeconds: number;
+  totalLikesOnAnalyzedComments: number;
+  totalRepliesOnAnalyzedComments: number;
 }
 
-export type AppStatus = 'idle' | 'configuring' | 'fetching' | 'filtering' | 'analyzing' | 'error' | 'success';
+export type AppStatus = 'idle' | 'fetching' | 'filtering' | 'analyzing' | 'success' | 'error';
 
-export type View = 'stats' | 'comments' | 'live';
-
-export interface TranscriptionEntry {
-  speaker: 'user' | 'model';
-  text: string;
+export interface Progress {
+    processed: number;
+    total: number;
 }
 
 export interface AppError {
-  code: string;
-  message: string;
+    code: string;
+    message: string;
+}
+
+export interface TranscriptionTurn {
+  speaker: 'user' | 'model';
+  text: string;
 }

@@ -1,46 +1,51 @@
-import React, { useEffect } from 'react';
-import { useStore } from '@/store';
-import { IdlePanel } from '@/components/panels/IdlePanel';
-import { LoadingPanel } from '@/components/panels/LoadingPanel';
-import { ResultsPanel } from '@/components/panels/ResultsPanel';
-import { ErrorPanel } from '@/components/panels/ErrorPanel';
-import { ConfigErrorPanel } from '@/components/panels/ConfigErrorPanel';
+import React from 'react';
+import { useAppStore } from './store';
+import { IdlePanel } from './components/panels/IdlePanel';
+import { LoadingPanel } from './components/panels/LoadingPanel';
+import { ResultsPanel } from './components/panels/ResultsPanel';
+import { ErrorPanel } from './components/panels/ErrorPanel';
+import { ConfigErrorPanel } from './components/panels/ConfigErrorPanel';
+import { PricingInfoModal } from './components/PricingInfoModal';
+import { CurrencyDollarIcon } from './components/Icons';
 
-interface AppProps {
-  videoId: string;
-}
-
-const App: React.FC<AppProps> = ({ videoId }) => {
-  const { status, initialize } = useStore();
-
-  useEffect(() => {
-    initialize();
-  }, [initialize]);
+export const App: React.FC = () => {
+  const { status, error, configError, isPricingInfoModalOpen, openPricingInfoModal, closePricingInfoModal } = useAppStore();
 
   const renderPanel = () => {
+    if (configError) {
+      return <ConfigErrorPanel />;
+    }
+    if (error) {
+      return <ErrorPanel />;
+    }
     switch (status) {
       case 'idle':
-        return <IdlePanel videoId={videoId} />;
-      case 'configuring':
-        return <ConfigErrorPanel />;
+        return <IdlePanel />;
       case 'fetching':
       case 'filtering':
       case 'analyzing':
         return <LoadingPanel />;
       case 'success':
         return <ResultsPanel />;
-      case 'error':
-        return <ErrorPanel />;
       default:
-        return null;
+        return <IdlePanel />;
     }
   };
 
   return (
-    <div className="bg-gray-900 text-gray-300 font-sans p-4 rounded-lg my-4 border border-gray-700">
+    <div className="w-full bg-gray-900 text-gray-300 font-sans p-4 rounded-lg border border-gray-700/50">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-xl font-bold text-white">YouTube Comment Analyzer</h1>
+        <button
+            onClick={openPricingInfoModal}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-white"
+        >
+            <CurrencyDollarIcon className="w-4 h-4" />
+            API Cost Info
+        </button>
+      </div>
       {renderPanel()}
+      {isPricingInfoModalOpen && <PricingInfoModal onClose={closePricingInfoModal} />}
     </div>
   );
 };
-
-export default App;

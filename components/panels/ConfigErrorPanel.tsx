@@ -1,8 +1,9 @@
+
 // FIX: Add chrome type declaration to fix build errors due to missing @types/chrome.
 declare const chrome: any;
 
 import React from 'react';
-import { useAppStore } from '../../store';
+import { useAppStore } from '../../src/store';
 
 export const ConfigErrorPanel = () => {
   const { configError } = useAppStore();

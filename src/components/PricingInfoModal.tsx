@@ -1,35 +1,58 @@
 import React from 'react';
-import { XIcon } from '@/components/Icons';
+import { CloseIcon, ExternalLinkIcon } from './Icons';
 
 interface PricingInfoModalProps {
-  isOpen: boolean;
   onClose: () => void;
 }
 
-export const PricingInfoModal: React.FC<PricingInfoModalProps> = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
+export const PricingInfoModal: React.FC<PricingInfoModalProps> = ({
+  onClose,
+}) => {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-gray-800 p-6 rounded-lg max-w-lg w-full text-gray-300 relative">
-        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
-            <XIcon className="w-6 h-6" />
-        </button>
-        <h2 className="text-xl font-bold text-white">API Usage & Pricing</h2>
-        <p className="text-sm text-gray-400 mt-2">
-            This extension requires your own API keys for the YouTube Data API and Google Gemini API.
-            Usage of these APIs is billed directly to your Google Cloud account and is not controlled by this extension.
-        </p>
-        <div className="mt-4 text-xs space-y-1">
-            <p>
-                - The <strong className="text-white">YouTube Data API</strong> has a free daily quota which is usually sufficient for personal use.
-            </p>
-            <p>
-                - The <strong className="text-white">Google Gemini API</strong> (via AI Studio) also has a free tier. Heavy usage may incur costs.
-            </p>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div className="bg-gray-800 text-gray-300 rounded-lg shadow-xl w-full max-w-lg border border-gray-700">
+        <div className="flex justify-between items-center p-4 border-b border-gray-700">
+          <h2 className="text-lg font-bold text-white">API Cost Information</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
+            <CloseIcon className="w-6 h-6" />
+          </button>
         </div>
-        <p className="text-xs text-gray-500 mt-4">
-            Please consult the official pricing pages for <a href="https://cloud.google.com/youtube/data/pricing" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">YouTube</a> and <a href="https://ai.google.dev/pricing" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Gemini</a> for the most up-to-date information.
-        </p>
+        <div className="p-6 space-y-4 text-sm">
+          <p>
+            This extension uses the Google Gemini API to analyze comments. While
+            Google provides a generous free tier, usage beyond that may incur
+            costs. **You are responsible for all costs associated with your
+            own API key.**
+          </p>
+          <div className="p-3 bg-gray-900/50 border border-gray-700 rounded-lg">
+            <h3 className="font-semibold text-white">Example Calculation</h3>
+            <p className="mt-1">
+              Let's say you analyze 10,000 comments, and the total text sent to
+              the AI (the "input tokens") is 500,000 characters.
+            </p>
+            <ul className="list-disc list-inside mt-2 text-gray-400">
+              <li>
+                {/* FIX: Corrected model name from 1.5 to 2.5 */}
+                Gemini 2.5 Flash (the model used) is priced per character.
+              </li>
+              <li>
+                The cost for this analysis would be a very small fraction of a cent.
+              </li>
+            </ul>
+            <p className="mt-2">
+              It is generally very affordable for personal use, but it's important to be aware of the pricing model.
+            </p>
+          </div>
+          <a
+            href="https://ai.google.dev/pricing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-blue-400 hover:underline"
+          >
+            View Official Gemini API Pricing{' '}
+            <ExternalLinkIcon className="w-4 h-4" />
+          </a>
+        </div>
       </div>
     </div>
   );

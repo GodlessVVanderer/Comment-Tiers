@@ -1,41 +1,13 @@
-// This is a placeholder for constants.ts
-// For example:
-// export const API_KEY = '...';
-
-import { Category } from './types';
-
-export const COMMENT_LIMITS = [1000, 2000, 5000, 10000, 20000, 30000];
+export const COMMENT_LIMIT_OPTIONS = [1000, 5000, 10000, 20000, 30000];
 export const DEFAULT_COMMENT_LIMIT = 5000;
 
+// Analysis constants
 export const GEMINI_BATCH_SIZE = 50;
-export const CONCURRENCY_LIMIT = 10;
-export const MIN_COMMENT_LENGTH = 15; // characters
-export const NGRAM_SPAM_THRESHOLD = 0.6; // 60% repetitive n-grams
+export const GEMINI_CONCURRENCY_LIMIT = 10;
 
-export const CATEGORIES: Omit<Category, 'comments'>[] = [
-  {
-    name: 'Questions',
-    icon: '❓',
-    prompt: 'Comments asking questions about the video content or related topics.',
-  },
-  {
-    name: 'Feedback',
-    icon: '💡',
-    prompt: 'Comments providing feedback, suggestions, or constructive criticism.',
-  },
-  {
-    name: 'Highlights',
-    icon: '⭐',
-    prompt: 'Comments pointing out memorable moments or key takeaways from the video.',
-  },
-  {
-    name: 'Discussions',
-    icon: '💬',
-    prompt: 'Comments engaging in discussions with the creator or other viewers.',
-  },
-  {
-    name: 'Other',
-    icon: '📁',
-    prompt: 'Comments that do not fit into the other categories, such as jokes, memes, or general statements.',
-  },
-];
+// Spam filtering constants
+export const MIN_WORD_COUNT = 3;
+export const NGRAM_SIZE = 3;
+export const NGRAM_THRESHOLD = 5;
+
+export const INJECTION_ROOT_ID = 'comment-tiers-root';

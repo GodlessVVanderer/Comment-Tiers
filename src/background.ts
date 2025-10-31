@@ -1,69 +1,75 @@
-// Add chrome type declaration to avoid TypeScript errors in a web extension context.
+// FIX: Add chrome type declaration to fix build errors due to missing @types/chrome.
 declare const chrome: any;
-import { MIN_COMMENT_LENGTH, NGRAM_SPAM_THRESHOLD } from '@/constants';
-import { Comment } from '@/types';
 
-// Function to calculate n-grams and check for repetition
-const isSpam = (text: string): boolean => {
-  const n = 4; // n-gram size
-  if (text.length < n) return false;
-  
-  const ngrams = new Map<string, number>();
-  let totalNgrams = 0;
-  for (let i = 0; i <= text.length - n; i++) {
-    const ngram = text.substring(i, i + n);
-    ngrams.set(ngram, (ngrams.get(ngram) || 0) + 1);
-    totalNgrams++;
+import { NGRAM_SIZE, NGRAM_THRESHOLD, MIN_WORD_COUNT } from './constants';
+
+// Helper for n-gram generation
+const getNgrams = (text: string, size: number): Set<string> => {
+  const ngrams = new Set<string>();
+  const words = text.toLowerCase().split(/\s+/);
+  for (let i = 0; i <= words.length - size; i++) {
+    ngrams.add(words.slice(i, i + size).join(' '));
   }
-
-  if (totalNgrams === 0) return false;
-
-  let repetitiveCount = 0;
-  for (const count of ngrams.values()) {
-    if (count > 1) {
-      repetitiveCount += count - 1;
-    }
-  }
-  
-  return (repetitiveCount / totalNgrams) > NGRAM_SPAM_THRESHOLD;
+  return ngrams;
 };
 
-const prefilterComments = (comments: Comment[]): { filteredComments: Comment[], totalFiltered: number } => {
-  const seenComments = new Set<string>();
-  const filteredComments = comments.filter(comment => {
-    // Basic length check
-    if (comment.text.length < MIN_COMMENT_LENGTH) return false;
+const prefilterComments = (comments: any[]): any[] => {
+  const ngramCounts: Record<string, number> = {};
+  const spamNgrams = new Set<string>();
+
+  // First pass: count all n-grams
+  comments.forEach(comment => {
+    const text = comment.snippet?.topLevelComment?.snippet?.textOriginal || '';
+    const ngrams = getNgrams(text, NGRAM_SIZE);
+    ngrams.forEach(ngram => {
+      ngramCounts[ngram] = (ngramCounts[ngram] || 0) + 1;
+    });
+  });
+
+  // Identify spam n-grams
+  for (const ngram in ngramCounts) {
+    if (ngramCounts[ngram] >= NGRAM_THRESHOLD) {
+      spamNgrams.add(ngram);
+    }
+  }
+
+  // Second pass: filter comments
+  const filtered = comments.filter(comment => {
+    const text = comment.snippet?.topLevelComment?.snippet?.textOriginal || '';
+    const wordCount = text.split(/\s+/).length;
     
-    // Check for repetitive n-grams
-    if (isSpam(comment.text.toLowerCase())) return false;
+    // Rule 1: Minimum word count
+    if (wordCount < MIN_WORD_COUNT) return false;
 
-    // Check for exact duplicates
-    const normalizedText = comment.text.toLowerCase().trim();
-    if (seenComments.has(normalizedText)) return false;
-
-    seenComments.add(normalizedText);
+    // Rule 2: Spam n-gram check
+    const ngrams = getNgrams(text, NGRAM_SIZE);
+    for (const ngram of ngrams) {
+      if (spamNgrams.has(ngram)) return false;
+    }
+    
     return true;
   });
 
-  return { filteredComments, totalFiltered: comments.length - filteredComments.length };
+  return filtered;
 };
 
 
-chrome.runtime.onMessage.addListener((request: any, sender: any, sendResponse: (response?: any) => void) => {
-  if (request.action === 'openOptionsPage') {
-    chrome.runtime.openOptionsPage();
-    return true;
-  }
-
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'prefilter-comments') {
-    const { comments } = request.payload;
-    const result = prefilterComments(comments);
-    sendResponse(result);
-    return true; // Indicates async response
+    const filteredComments = prefilterComments(request.comments);
+    sendResponse({ filteredComments });
+    return true; // Indicates you will send a response asynchronously
   }
   
-  if (request.action === 'injection-failed') {
-    console.error('[Comment Tiers] Content script failed to inject. YouTube page structure may have changed.', request.payload.error);
-    return true;
+  if (request.action === 'open-options-page') {
+    chrome.runtime.openOptionsPage();
   }
+
+  if (request.action === 'injection-failed') {
+    console.error("[Comment Tiers] Content script failed to inject the application into the YouTube page.");
+  }
+});
+
+chrome.action.onClicked.addListener(() => {
+  chrome.runtime.openOptionsPage();
 });

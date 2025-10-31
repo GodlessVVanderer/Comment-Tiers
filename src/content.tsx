@@ -1,49 +1,40 @@
-// Add chrome type declaration to avoid TypeScript errors in a web extension context.
+// FIX: Add chrome type declaration to fix build errors due to missing @types/chrome.
 declare const chrome: any;
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from '@/App';
-import { useStore } from '@/store';
-// Explicitly import styles as a string for Shadow DOM injection
+import { App } from './App';
+import { INJECTION_ROOT_ID } from './constants';
+import { useAppStore } from './store';
 import styles from './style.css?inline';
 
-let mountPoint: HTMLElement | null = null;
 let root: ReactDOM.Root | null = null;
+let container: HTMLDivElement | null = null;
 let currentVideoId: string | null = null;
 
-const INJECTION_POINT_ID = 'comments';
-const APP_ROOT_ID = 'youtube-comment-analyzer-root';
+const mountApp = (target: Element, videoId: string) => {
+  if (container) return; // Already mounted
 
-const injectApp = (videoId: string) => {
-  if (document.getElementById(APP_ROOT_ID)) {
-    return; // Already injected
-  }
+  container = document.createElement('div');
+  container.id = INJECTION_ROOT_ID;
+  target.parentElement?.insertBefore(container, target);
 
-  const pivot = document.getElementById(INJECTION_POINT_ID);
-  if (!pivot) {
-    console.error('[Comment Tiers] Could not find injection point #comments.');
-    return;
-  }
-
-  mountPoint = document.createElement('div');
-  mountPoint.id = APP_ROOT_ID;
-  pivot.prepend(mountPoint);
-  
-  const shadowRoot = mountPoint.attachShadow({ mode: 'open' });
-  const appContainer = document.createElement('div');
-  shadowRoot.appendChild(appContainer);
+  const shadowRoot = container.attachShadow({ mode: 'open' });
+  const appRoot = document.createElement('div');
+  shadowRoot.appendChild(appRoot);
 
   const styleSheet = document.createElement('style');
   styleSheet.textContent = styles;
   shadowRoot.appendChild(styleSheet);
   
-  root = ReactDOM.createRoot(appContainer);
+  root = ReactDOM.createRoot(appRoot);
   root.render(
     <React.StrictMode>
-      <App videoId={videoId} />
+      <App />
     </React.StrictMode>
   );
-  currentVideoId = videoId;
+  
+  useAppStore.getState().initialize(videoId);
 };
 
 const unmountApp = () => {
@@ -51,49 +42,63 @@ const unmountApp = () => {
     root.unmount();
     root = null;
   }
-  if (mountPoint) {
-    mountPoint.remove();
-    mountPoint = null;
+  if (container) {
+    container.remove();
+    container = null;
   }
-  currentVideoId = null;
+  useAppStore.getState().reset();
 };
 
-const main = () => {
+const observer = new MutationObserver(() => {
   const urlParams = new URLSearchParams(window.location.search);
-  const videoId = urlParams.get('v');
+  const videoIdOnPage = urlParams.get('v');
+  
+  if (videoIdOnPage !== currentVideoId) {
+    currentVideoId = videoIdOnPage;
+    unmountApp(); // Unmount on navigation
+  }
 
-  if (videoId) {
-    if (videoId !== currentVideoId) {
-      unmountApp();
-      injectApp(videoId);
+  const commentsElement = document.querySelector('#comments');
+
+  if (commentsElement && currentVideoId) {
+    if (!container) { // If app is not on page, mount it
+      mountApp(commentsElement, currentVideoId);
     }
   } else {
-    unmountApp();
+    if (container) { // If app is on page but shouldn't be, unmount it
+      unmountApp();
+    }
+  }
+});
+
+const startObserver = () => {
+    observer.observe(document.body, { childList: true, subtree: true });
+};
+
+const retryInjection = (retries = 20, delay = 500) => {
+  const commentsElement = document.querySelector('#comments');
+  currentVideoId = new URLSearchParams(window.location.search).get('v');
+
+  if (commentsElement && currentVideoId) {
+    mountApp(commentsElement, currentVideoId);
+    startObserver();
+  } else if (retries > 0) {
+    setTimeout(() => retryInjection(retries - 1, delay), delay);
+  } else {
+    console.error('[Comment Tiers] Could not find YouTube comments section to inject into after 10 seconds.');
+    chrome.runtime.sendMessage({ action: 'injection-failed' });
   }
 };
 
-// Listen for messages from other parts of the extension
-chrome.runtime.onMessage.addListener((request: any) => {
-  if (request.action === 'keys-updated') {
-    // Re-initialize the store's state which will trigger a re-render in the App
-    useStore.getState().initialize();
-  }
+// Listen for messages from options page
+chrome.runtime.onMessage.addListener(async (request) => {
+    if (request.action === 'keys-updated') {
+        const videoId = new URLSearchParams(window.location.search).get('v');
+        // Re-hydrate the store to get the new keys
+        await useAppStore.persist.rehydrate();
+        useAppStore.getState().initialize(videoId);
+    }
 });
 
-// Handle YouTube's SPA navigation
-const observer = new MutationObserver(() => {
-  // A simple check to see if the URL has changed is sufficient for YouTube's navigation
-  const urlParams = new URLSearchParams(window.location.search);
-  const newVideoId = urlParams.get('v');
-  if (newVideoId !== currentVideoId) {
-    main();
-  }
-});
 
-observer.observe(document.body, {
-  childList: true,
-  subtree: true,
-});
-
-// Initial run
-main();
+retryInjection();

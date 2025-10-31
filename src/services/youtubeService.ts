@@ -1,103 +1,74 @@
-import { Comment } from '@/types';
 
-const YOUTUBE_API_BASE_URL = 'https://www.googleapis.com/youtube/v3/';
+import { Comment } from '../types';
 
-const transformComment = (item: any): Comment => {
-  const snippet = item.snippet.topLevelComment.snippet;
-  return {
-    id: item.snippet.topLevelComment.id,
-    author: snippet.authorDisplayName,
-    authorProfileImageUrl: snippet.authorProfileImageUrl,
-    text: snippet.textDisplay,
-    publishedAt: snippet.publishedAt,
-    likeCount: snippet.likeCount,
-    replyCount: item.snippet.totalReplyCount,
-    replies: [],
-  };
-};
+declare const chrome: any;
 
-const transformReply = (item: any): Comment => {
-    const snippet = item.snippet;
-    return {
-      id: item.id,
-      author: snippet.authorDisplayName,
-      authorProfileImageUrl: snippet.authorProfileImageUrl,
-      text: snippet.textDisplay,
-      publishedAt: snippet.publishedAt,
-      likeCount: snippet.likeCount,
-      replyCount: 0, // Replies don't have replies of their own in this structure
-    };
-  };
+const BASE_URL = 'https://www.googleapis.com/youtube/v3/';
 
-export const fetchComments = async (
+// This function needs to handle pagination
+export const fetchAllComments = async (
   videoId: string,
   apiKey: string,
-  onProgress: (percentage: number) => void,
-  limit: number
-): Promise<Comment[]> => {
-  let comments: Comment[] = [];
+  limit: number,
+  onUpdate: (processed: number, total: number) => void
+): Promise<any[]> => {
+  let comments: any[] = [];
   let nextPageToken: string | undefined = undefined;
-  const maxResults = 100; // Max allowed by API
+  let fetchedCount = 0;
 
-  try {
-    do {
-      const url = new URL('commentThreads', YOUTUBE_API_BASE_URL);
-      url.searchParams.append('part', 'snippet,replies');
-      url.searchParams.append('videoId', videoId);
-      url.searchParams.append('key', apiKey);
-      url.searchParams.append('maxResults', String(maxResults));
-      url.searchParams.append('order', 'relevance');
-      if (nextPageToken) {
-        url.searchParams.append('pageToken', nextPageToken);
-      }
+  do {
+    const params = new URLSearchParams({
+      part: 'snippet,replies',
+      videoId: videoId,
+      key: apiKey,
+      maxResults: '100',
+      textFormat: 'plainText',
+    });
+    if (nextPageToken) {
+      params.set('pageToken', nextPageToken);
+    }
 
-      const response = await fetch(url.toString());
-      const data = await response.json();
-
-      if (data.error) {
-        const { message, code } = data.error;
-        if (code === 403 && message.includes('quotaExceeded')) {
-          throw new Error('YOUTUBE_QUOTA_EXCEEDED');
-        }
-        if (code === 403 && message.includes('commentsDisabled')) {
-            throw new Error('YOUTUBE_COMMENTS_DISABLED');
-        }
-        if (code === 400 && message.includes('API key not valid')) {
+    const response = await fetch(`${BASE_URL}commentThreads?${params.toString()}`);
+    if (!response.ok) {
+        const errorData = await response.json();
+        const errorMessage = errorData.error?.message || `HTTP error! status: ${response.status}`;
+        if (errorMessage.toLowerCase().includes('apikeyinvalid')) {
             throw new Error('YOUTUBE_INVALID_KEY');
         }
-        if (code === 404) {
-            throw new Error('YOUTUBE_VIDEO_NOT_FOUND');
+        if (errorMessage.toLowerCase().includes('quota')) { // quotaExceeded, etc.
+            throw new Error('YOUTUBE_QUOTA_EXCEEDED');
         }
-        throw new Error(message || 'An unknown YouTube API error occurred.');
-      }
-
-      if (!data.items) {
-        // No more comments or comments are disabled
-        break;
-      }
-
-      const newComments = data.items.map(transformComment);
-      
-      data.items.forEach((item: any, index: number) => {
-        if (item.replies) {
-          newComments[index].replies = item.replies.comments.map(transformReply);
-        }
-      });
-
-      comments = [...comments, ...newComments];
-      nextPageToken = data.nextPageToken;
-
-      onProgress((comments.length / limit) * 100);
-
-    } while (nextPageToken && comments.length < limit);
-
-    return comments.slice(0, limit);
-  } catch (e: any) {
-    // Re-throw custom errors
-    if (e.message.startsWith('YOUTUBE_')) {
-      throw e;
+        throw new Error('YOUTUBE_API_ERROR');
     }
-    console.error('Failed to fetch YouTube comments:', e);
-    throw new Error('Failed to fetch comments. Check your network connection and API key.');
-  }
+
+    const data = await response.json();
+    comments = comments.concat(data.items);
+    fetchedCount = comments.length;
+    nextPageToken = data.nextPageToken;
+    
+    // We use the limit as the total for progress reporting.
+    onUpdate(fetchedCount, limit);
+
+  } while (nextPageToken && fetchedCount < limit);
+
+  return comments.slice(0, limit);
+};
+
+export const getVideoDetails = async (videoId: string, apiKey: string) => {
+    const params = new URLSearchParams({
+        part: 'snippet,statistics',
+        id: videoId,
+        key: apiKey,
+    });
+
+    const response = await fetch(`${BASE_URL}videos?${params.toString()}`);
+    if (!response.ok) {
+        console.error('Failed to fetch video details');
+        return null;
+    }
+    const data = await response.json();
+    if (data.items && data.items.length > 0) {
+        return data.items[0];
+    }
+    return null;
 };

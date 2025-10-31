@@ -1,174 +1,157 @@
+
 import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from '@google/genai';
-import { AnalysisResult, Category, Comment, ProgressUpdate } from '@/types';
-import { CATEGORIES, CONCURRENCY_LIMIT, GEMINI_BATCH_SIZE } from '@/constants';
+import { AnalysisResult } from '../types';
+import { GEMINI_BATCH_SIZE, GEMINI_CONCURRENCY_LIMIT } from '../constants';
 
 const responseSchema = {
-  type: Type.ARRAY,
-  items: {
     type: Type.OBJECT,
     properties: {
-      commentId: { type: Type.STRING },
-      category: { type: Type.STRING },
+        categories: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING },
+                    summary: { type: Type.STRING },
+                    comments: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                    },
+                },
+                required: ['name', 'summary', 'comments'],
+            },
+        },
     },
-    required: ['commentId', 'category'],
-  },
+    required: ['categories'],
 };
 
-const safetySettings = [
-  {
-    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
-  },
-];
+const runConcurrent = <T, R>(
+    tasks: T[],
+    taskFn: (task: T) => Promise<R>,
+    concurrencyLimit: number
+): Promise<R[]> => {
+    const results: R[] = [];
+    let running = 0;
+    let taskIndex = 0;
+
+    return new Promise((resolve, reject) => {
+        const run = () => {
+            if (taskIndex >= tasks.length && running === 0) {
+                return resolve(results);
+            }
+
+            while (running < concurrencyLimit && taskIndex < tasks.length) {
+                running++;
+                const currentTaskIndex = taskIndex++;
+                taskFn(tasks[currentTaskIndex])
+                    .then(result => {
+                        results[currentTaskIndex] = result;
+                    })
+                    .catch(reject)
+                    .finally(() => {
+                        running--;
+                        run();
+                    });
+            }
+        };
+        run();
+    });
+};
 
 export const analyzeComments = async (
-  comments: Comment[],
-  geminiApiKey: string,
-  onUpdate: (progress: ProgressUpdate) => void,
-  targetLanguage: string
+    comments: string[],
+    apiKey: string,
+    onUpdate: (processed: number) => void,
+    userLanguage: string
 ): Promise<AnalysisResult> => {
-  const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-  
-  const batches: Comment[][] = [];
-  for (let i = 0; i < comments.length; i += GEMINI_BATCH_SIZE) {
-    batches.push(comments.slice(i, i + GEMINI_BATCH_SIZE));
-  }
+    const ai = new GoogleGenAI({ apiKey });
 
-  const categorizedComments: { comment: Comment; categoryName: string }[] = [];
-  let completedBatches = 0;
-  const startTime = Date.now();
-  
-  const systemInstruction = `You are an expert YouTube comment analyst. Your task is to classify comments into predefined categories. The user's browser language is ${targetLanguage}. All category names and summaries in your final output MUST be in ${targetLanguage}.`;
-  
-  const processBatch = async (batch: Comment[]) => {
-    const commentsText = batch.map((c) => `COMMENT ID: ${c.id}\nCOMMENT: "${c.text}"`).join('\n---\n');
-    const prompt = `
-      Analyze the following batch of YouTube comments. For each comment, classify it into ONE of the following categories:
-      ${CATEGORIES.map((c) => `- ${c.name}: ${c.prompt}`).join('\n')}
+    const batches: string[][] = [];
+    for (let i = 0; i < comments.length; i += GEMINI_BATCH_SIZE) {
+        batches.push(comments.slice(i, i + GEMINI_BATCH_SIZE));
+    }
 
-      Your response MUST be a valid JSON array of objects, where each object has a "commentId" and a "category" field.
-      The "category" MUST be one of these exact English strings: [${CATEGORIES.map((c) => `"${c.name}"`).join(', ')}].
-      
-      Here are the comments:
-      ---
-      ${commentsText}
-      ---
-    `;
+    let processedCount = 0;
 
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          systemInstruction,
-          responseMimeType: 'application/json',
-          responseSchema: responseSchema,
-          safetySettings,
-        },
-      });
-      const jsonString = response.text.trim();
-      const results: { commentId: string; category: string }[] = JSON.parse(jsonString);
+    const processBatch = async (batch: string[]): Promise<AnalysisResult> => {
+        const prompt = `You are a YouTube comment analysis expert. I will provide you with a JSON array of comments in various languages.
+Your task is to analyze them and categorize them into 5-7 insightful themes or topics.
+For each theme, provide a concise one-sentence summary and a list of the exact original comment strings that belong to that theme.
+Do not create categories for spam, promotions, or generic comments like "first!". Focus on substantive discussion.
 
-      for (const result of results) {
-        const originalComment = comments.find((c) => c.id === result.commentId);
-        if (originalComment) {
-          categorizedComments.push({
-            comment: originalComment,
-            categoryName: result.category,
-          });
+IMPORTANT: The final output for category names and summaries MUST be translated into the following language: ${userLanguage}.
+The comment strings inside the 'comments' array must remain in their original, untranslated form.
+
+Here are the comments:
+${JSON.stringify(batch)}
+
+Respond with a valid JSON object only, matching the specified schema. Do not include any other text or markdown formatting.`;
+        
+        try {
+            // FIX: Moved safetySettings inside the config object to align with the API.
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: responseSchema,
+                    // @ts-ignore
+                    safetySettings: [
+                        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+                        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+                    ]
+                },
+            });
+
+            const jsonText = response.text.trim() ?? '';
+            if (!jsonText) {
+                return { categories: [] };
+            }
+            const result = JSON.parse(jsonText);
+            
+            processedCount += batch.length;
+            onUpdate(processedCount);
+
+            return result;
+        } catch (error: any) {
+            console.error('Error analyzing batch with Gemini:', error);
+            if (error.message.includes('API key not valid')) {
+                throw new Error('GEMINI_INVALID_KEY');
+            }
+            if (error.message.includes('quota')) {
+                throw new Error('GEMINI_QUOTA_EXCEEDED');
+            }
+            throw new Error('GEMINI_API_ERROR');
         }
-      }
-    } catch (e: any) {
-      if (e.message?.includes('API key not valid')) {
-        throw new Error('GEMINI_INVALID_KEY');
-      }
-      console.error('Error analyzing batch:', e);
-    } finally {
-      completedBatches++;
-      const percentage = (completedBatches / batches.length) * 100;
-      const elapsedTime = (Date.now() - startTime) / 1000;
-      const etaSeconds = (elapsedTime / completedBatches) * (batches.length - completedBatches);
-      onUpdate({
-        percentage,
-        batch: completedBatches,
-        totalBatches: batches.length,
-        etaSeconds: Math.round(etaSeconds),
-      });
+    };
+    
+    const batchResults = await runConcurrent(batches, processBatch, GEMINI_CONCURRENCY_LIMIT);
+
+    const mergedResult: AnalysisResult = { categories: [] };
+    const categoryMap = new Map<string, { summary: string; comments: string[] }>();
+
+    for (const result of batchResults) {
+        if (result && result.categories) {
+            for (const category of result.categories) {
+                if (categoryMap.has(category.name)) {
+                    const existing = categoryMap.get(category.name)!;
+                    existing.comments.push(...category.comments);
+                } else {
+                    categoryMap.set(category.name, { summary: category.summary, comments: category.comments });
+                }
+            }
+        }
     }
-  };
 
-  const concurrencyPool = new Set();
-  for (const batch of batches) {
-    const promise = processBatch(batch);
-    concurrencyPool.add(promise);
-    promise.finally(() => concurrencyPool.delete(promise));
-    if (concurrencyPool.size >= CONCURRENCY_LIMIT) {
-      await Promise.race(concurrencyPool);
-    }
-  }
-  await Promise.all(concurrencyPool);
+    categoryMap.forEach((value, key) => {
+        mergedResult.categories.push({
+            name: key,
+            summary: value.summary,
+            comments: value.comments,
+        });
+    });
 
-  return processFinalAnalysis(categorizedComments, comments.length, ai, targetLanguage);
-};
-
-const processFinalAnalysis = async (
-  categorizedComments: { comment: Comment; categoryName: string }[],
-  totalAnalyzed: number,
-  ai: GoogleGenAI,
-  targetLanguage: string
-): Promise<AnalysisResult> => {
-  const summaryPrompt = `
-    Based on the following categorized YouTube comments, provide a concise overall summary of the comment section in 2-3 sentences.
-    Mention the general sentiment and the most discussed topics. The summary MUST be in ${targetLanguage}.
-    Comments:
-    ${categorizedComments.slice(0, 100).map((c) => `[${c.categoryName}] ${c.comment.text}`).join('\n')}
-  `;
-
-  let summary = 'The comment section features a mix of feedback, questions, and discussions.';
-  try {
-    const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: summaryPrompt });
-    summary = response.text;
-  } catch (e) {
-    console.error('Failed to generate summary:', e);
-  }
-
-  const categories: Category[] = CATEGORIES.map((cat) => ({ ...cat, comments: [] }));
-  const categoryMap = new Map<string, Comment[]>(categories.map((c) => [c.name, c.comments]));
-
-  categorizedComments.forEach(({ comment, categoryName }) => {
-    const categoryList = categoryMap.get(categoryName);
-    if (categoryList) {
-      categoryList.push(comment);
-    } else {
-      categoryMap.get('Other')?.push(comment); // Fallback
-    }
-  });
-
-  const topComments = categorizedComments
-    .map((c) => c.comment)
-    .sort((a, b) => b.likeCount - a.likeCount)
-    .slice(0, 10);
-  
-  return {
-    summary,
-    stats: {
-        totalComments: 0, // Will be set in the store
-        filteredComments: 0, // Will be set in the store
-        analyzedComments: totalAnalyzed,
-    },
-    categories,
-    topComments,
-  };
+    return mergedResult;
 };

@@ -1,433 +1,306 @@
-import { create } from 'zustand';
-import { immer } from 'zustand/middleware/immer';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import {
-  AnalysisResult,
-  AppStatus,
-  Comment,
-  ProgressUpdate,
-  TranscriptionEntry,
-  View,
-  AppError,
-} from '@/types';
-import { fetchComments } from '@/services/youtubeService';
-import { analyzeComments } from '@/services/geminiService';
-import { startLiveConversation, stopLiveConversation, sendAudio } from '@/services/liveService';
-import { LiveServerMessage } from '@google/genai';
-import { decode, decodeAudioData } from '@/audioUtils';
 
-// For background script communication
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
+import {
+  AppStatus,
+  Category,
+  AnalysisStats,
+  Progress,
+  AppError,
+  TranscriptionTurn,
+  Comment,
+} from './types';
+import { fetchAllComments } from './services/youtubeService';
+import { prefilterComments } from './utils';
+import { analyzeComments } from './services/geminiService';
+import { DEFAULT_COMMENT_LIMIT } from './constants';
+import * as liveService from './services/liveService';
+
 declare const chrome: any;
 
 interface AppState {
-  youtubeApiKey: string | null;
-  geminiApiKey: string | null;
+  // Core state
   status: AppStatus;
+  progress: Progress;
+  results: Category[];
+  stats: AnalysisStats | null;
   error: AppError | null;
-  analysisResult: AnalysisResult | null;
-  progress: ProgressUpdate | null;
-  view: View;
-  
-  // Live conversation state
-  isListening: boolean;
-  isConnecting: boolean;
-  liveError: string | null;
-  transcriptions: TranscriptionEntry[];
+  configError: string | null;
+  videoId: string | null;
 
   // Config
+  youtubeApiKey: string | null;
+  geminiApiKey: string | null;
   commentLimit: number;
-  targetLanguage: string;
 
-  // Actions
-  initialize: () => void;
-  setYoutubeApiKey: (key: string) => void;
-  setGeminiApiKey: (key: string) => void;
-  setView: (view: View) => void;
-  setCommentLimit: (limit: number) => void;
-  startAnalysis: (videoId: string) => Promise<void>;
-  reset: () => void;
-  addReply: (path: string, text: string) => void;
-  editComment: (path: string, newText: string) => void;
-  addComment: (categoryName: string, text: string) => void;
-  
-  // Live conversation actions
-  startListening: () => void;
-  stopListening: () => void;
+  // UI State
+  isApiKeyHelpModalOpen: boolean;
+  isGeminiHelpModalOpen: boolean;
+  isPricingInfoModalOpen: boolean;
+
+  // Live session state
+  liveSession: {
+    isActive: boolean;
+    isListening: boolean;
+    isSpeaking: boolean;
+    statusMessage: string;
+    error: string | null;
+  };
+  transcription: TranscriptionTurn[];
 }
 
-// Live conversation audio resources
-let inputAudioContext: AudioContext | null = null;
-let outputAudioContext: AudioContext | null = null;
-let mediaStream: MediaStream | null = null;
-let scriptProcessor: ScriptProcessorNode | null = null;
-let nextStartTime = 0;
-const sources = new Set<AudioBufferSourceNode>();
+interface AppActions {
+  initialize: (videoId: string | null) => void;
+  reset: () => void;
+  setCommentLimit: (limit: number) => void;
+  analyze: (videoId: string) => Promise<void>;
 
+  // UI Actions
+  openApiKeyHelpModal: () => void;
+  closeApiKeyHelpModal: () => void;
+  openGeminiHelpModal: () => void;
+  closeGeminiHelpModal: () => void;
+  openPricingInfoModal: () => void;
+  closePricingInfoModal: () => void;
+  
+  // Live session actions
+  startLiveConversation: () => Promise<void>;
+  stopLiveConversation: () => void;
+}
 
-export const useStore = create<AppState>()(
+const initialState: AppState = {
+  status: 'idle',
+  progress: { processed: 0, total: 0 },
+  results: [],
+  stats: null,
+  error: null,
+  configError: null,
+  videoId: null,
+  youtubeApiKey: null,
+  geminiApiKey: null,
+  commentLimit: DEFAULT_COMMENT_LIMIT,
+  isApiKeyHelpModalOpen: false,
+  isGeminiHelpModalOpen: false,
+  isPricingInfoModalOpen: false,
+  liveSession: {
+    isActive: false,
+    isListening: false,
+    isSpeaking: false,
+    statusMessage: 'Not connected',
+    error: null,
+  },
+  transcription: [],
+};
+
+export const useAppStore = create<AppState & AppActions>()(
   persist(
     immer((set, get) => ({
-      youtubeApiKey: null,
-      geminiApiKey: null,
-      status: 'idle',
-      error: null,
-      analysisResult: null,
-      progress: null,
-      view: 'stats',
-      isListening: false,
-      isConnecting: false,
-      liveError: null,
-      transcriptions: [],
-      commentLimit: 5000,
-      targetLanguage: navigator.language || 'en',
+      ...initialState,
 
-      initialize: () => {
-        chrome.storage.local.get(['youtubeApiKey', 'geminiApiKey'], (result: any) => {
-          set((state) => {
-            state.youtubeApiKey = result.youtubeApiKey || null;
-            state.geminiApiKey = result.geminiApiKey || null;
-            if (!state.youtubeApiKey || !state.geminiApiKey) {
-              state.status = 'configuring';
+      initialize: (videoId) => {
+        const { youtubeApiKey, geminiApiKey } = get();
+        set((state) => {
+            state.videoId = videoId;
+            state.status = 'idle';
+            state.results = [];
+            state.stats = null;
+            state.error = null;
+            state.transcription = [];
+            state.liveSession = initialState.liveSession;
+
+            if (!youtubeApiKey || !geminiApiKey) {
+                state.configError = 'YouTube and/or Gemini API key is not set.';
+            } else {
+                state.configError = null;
             }
-          });
         });
       },
 
-      setYoutubeApiKey: (key) => {
-        set({ youtubeApiKey: key });
-        chrome.storage.local.set({ youtubeApiKey: key }, () => {
-          // Notify content script of key update
-          chrome.tabs.query({ active: true, currentWindow: true }, (tabs: any[]) => {
-            if (tabs[0]?.id) {
-              chrome.tabs.sendMessage(tabs[0].id, { action: 'keys-updated' });
-            }
-          });
-        });
-      },
+      reset: () => set(initialState),
 
-      setGeminiApiKey: (key) => {
-        set({ geminiApiKey: key });
-        chrome.storage.local.set({ geminiApiKey: key }, () => {
-          // Notify content script of key update
-          chrome.tabs.query({ active: true, currentWindow: true }, (tabs: any[]) => {
-            if (tabs[0]?.id) {
-              chrome.tabs.sendMessage(tabs[0].id, { action: 'keys-updated' });
-            }
-          });
-        });
-      },
-      
-      setView: (view) => set({ view }),
       setCommentLimit: (limit) => set({ commentLimit: limit }),
 
-      reset: () => {
-        set({
-          status: 'idle',
-          error: null,
-          analysisResult: null,
-          progress: null,
-          view: 'stats',
-        });
-      },
-
-      startAnalysis: async (videoId) => {
-        const { youtubeApiKey, geminiApiKey, commentLimit, targetLanguage } = get();
+      analyze: async (videoId) => {
+        const { youtubeApiKey, geminiApiKey, commentLimit } = get();
         if (!youtubeApiKey || !geminiApiKey) {
-          set({ status: 'configuring', error: null });
+          set({ configError: 'API keys are not set.' });
           return;
         }
 
-        set({ status: 'fetching', error: null, progress: { percentage: 0 } });
+        set({ status: 'fetching', error: null, configError: null, progress: { processed: 0, total: commentLimit } });
+        const startTime = Date.now();
         
         try {
           // 1. Fetch comments
-          const allComments = await fetchComments(
-            videoId,
-            youtubeApiKey,
-            (percentage) => set((state) => { if (state.progress) state.progress.percentage = percentage; }),
-            commentLimit
-          );
+          const rawComments = await fetchAllComments(videoId, youtubeApiKey, commentLimit, (processed, total) => {
+            set((state) => {
+              state.progress = { processed, total };
+            });
+          });
+          const fetchedCount = rawComments.length;
 
-          set({ status: 'filtering', progress: null });
-          
-          // 2. Prefilter comments in background script
-          const { filteredComments, totalFiltered } = await new Promise<{ filteredComments: Comment[], totalFiltered: number }>(resolve => {
-            chrome.runtime.sendMessage(
-              { action: 'prefilter-comments', payload: { comments: allComments } },
-              (response: any) => resolve(response)
-            );
+          // 2. Prefilter comments
+          set({ status: 'filtering', progress: { processed: 0, total: fetchedCount } });
+          const filteredCommentTexts = await prefilterComments(rawComments, (processed) => {
+             set(state => { state.progress.processed = processed; });
+          });
+          const analyzedCount = filteredCommentTexts.length;
+
+          // 3. Analyze with Gemini
+          set({ status: 'analyzing', progress: { processed: 0, total: analyzedCount } });
+          const userLanguage = navigator.language || 'en';
+          const analysisResult = await analyzeComments(filteredCommentTexts, geminiApiKey, (processed) => {
+            set((state) => { state.progress.processed = processed; });
+          }, userLanguage);
+
+          // 4. Process results
+          const commentMap = new Map<string, Comment>();
+          const flatComments: Comment[] = [];
+
+          rawComments.forEach(item => {
+            const topLevelComment = item.snippet.topLevelComment;
+            const mapComment = (c: any): Comment => ({
+                id: c.id,
+                text: c.snippet.textOriginal,
+                author: c.snippet.authorDisplayName,
+                authorProfileImageUrl: c.snippet.authorProfileImageUrl,
+                likeCount: c.snippet.likeCount,
+                publishedAt: c.snippet.publishedAt,
+                replies: [],
+            });
+            const comment = mapComment(topLevelComment);
+            if (item.replies?.comments) {
+                comment.replies = item.replies.comments.map(mapComment);
+            }
+            flatComments.push(comment, ...(comment.replies || []));
           });
           
-          if (filteredComments.length === 0) {
-            throw { code: 'NO_COMMENTS', message: 'No comments found after filtering.' };
-          }
+          flatComments.forEach(c => commentMap.set(c.text, c));
+
+          const enrichedCategories: Category[] = analysisResult.categories
+            .map(category => ({
+                ...category,
+                comments: category.comments.map(text => commentMap.get(text)).filter((c): c is Comment => !!c)
+            }))
+            .filter(category => category.comments.length > 0);
+
+          const allAnalyzedComments = enrichedCategories.flatMap(c => c.comments);
+          const totalLikes = allAnalyzedComments.reduce((sum, comment) => sum + comment.likeCount, 0);
+          const totalReplies = allAnalyzedComments.reduce((sum, comment) => sum + (comment.replies?.length || 0), 0);
+
+          const duration = (Date.now() - startTime) / 1000;
           
-          set({ status: 'analyzing', progress: { percentage: 0 } });
-          
-          // 3. Analyze comments
-          const result = await analyzeComments(
-            filteredComments,
-            geminiApiKey,
-            (update) => set({ progress: update }),
-            targetLanguage
-          );
-
-          result.stats.totalComments = allComments.length;
-          result.stats.filteredComments = totalFiltered;
-
-          set({ status: 'success', analysisResult: result, progress: null });
-
-          // Send notification
-          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            new Notification('Comment Analysis Complete', {
-              body: `Successfully analyzed ${result.stats.analyzedComments} comments for the video.`,
-              icon: '/icon48.png'
-            });
-          }
+          set({
+            status: 'success',
+            results: enrichedCategories,
+            stats: {
+                totalCommentsFetched: fetchedCount,
+                totalCommentsAnalyzed: analyzedCount,
+                analysisDurationSeconds: duration,
+                totalLikesOnAnalyzedComments: totalLikes,
+                totalRepliesOnAnalyzedComments: totalReplies,
+            },
+          });
 
         } catch (e: any) {
-          const errorCode = e.message;
-          let errorMessage = 'An unknown error occurred.';
-          
-          const errorMap: Record<string, string> = {
-            YOUTUBE_QUOTA_EXCEEDED: 'YouTube API quota exceeded. Please try again later.',
-            YOUTUBE_COMMENTS_DISABLED: 'Comments are disabled for this video.',
-            YOUTUBE_INVALID_KEY: 'Your YouTube API key is invalid. Please check it in the options.',
-            GEMINI_INVALID_KEY: 'Your Gemini API key is invalid. Please check it in the options.',
-            YOUTUBE_VIDEO_NOT_FOUND: 'The video was not found.',
-            NO_COMMENTS: 'No relevant comments were found to analyze for this video.',
+          const code = e.message || 'UNKNOWN_ERROR';
+          const messageMap: Record<string, string> = {
+            'YOUTUBE_INVALID_KEY': 'Your YouTube API key is invalid. Please check it in the options.',
+            'YOUTUBE_QUOTA_EXCEEDED': 'You have exceeded your YouTube API quota. Please wait or increase your quota.',
+            'YOUTUBE_API_ERROR': 'An error occurred while fetching comments from YouTube.',
+            'GEMINI_INVALID_KEY': 'Your Gemini API key is invalid. Please check it in the options.',
+            'GEMINI_QUOTA_EXCEEDED': 'You have exceeded your Gemini API quota.',
+            'GEMINI_API_ERROR': 'An error occurred while analyzing comments with Gemini.',
+            'UNKNOWN_ERROR': 'An unexpected error occurred during analysis.'
           };
-          
-          if (errorMap[errorCode]) {
-            errorMessage = errorMap[errorCode];
-          } else if (typeof e.message === 'string') {
-            errorMessage = e.message;
-          }
-
-          set({ status: 'error', error: { code: errorCode, message: errorMessage } });
+          set({ status: 'error', error: { code, message: messageMap[code] || messageMap['UNKNOWN_ERROR'] } });
         }
       },
 
-      addReply: (path, text) => {
-        set((state) => {
-          if (!state.analysisResult) return;
-          const pathParts = path.split(':');
-          const categoryName = pathParts[0];
-          
-          let currentLevel: any = state.analysisResult.categories.find(c => c.name === categoryName);
-          if (!currentLevel) return;
+      // UI Actions
+      openApiKeyHelpModal: () => set({ isApiKeyHelpModalOpen: true }),
+      closeApiKeyHelpModal: () => set({ isApiKeyHelpModalOpen: false }),
+      openGeminiHelpModal: () => set({ isGeminiHelpModalOpen: true }),
+      closeGeminiHelpModal: () => set({ isGeminiHelpModalOpen: false }),
+      openPricingInfoModal: () => set({ isPricingInfoModalOpen: true }),
+      closePricingInfoModal: () => set({ isPricingInfoModalOpen: false }),
 
-          for (let i = 1; i < pathParts.length; i += 2) {
-              const key = pathParts[i]; // 'comments' or 'replies'
-              const index = parseInt(pathParts[i + 1]);
-              if (key === 'comments') {
-                  currentLevel = currentLevel.comments[index];
-              } else if (key === 'replies') {
-                  currentLevel = currentLevel.replies[index];
-              }
-          }
-
-          if (!currentLevel.replies) {
-              currentLevel.replies = [];
-          }
-          
-          const newReply: Comment = {
-            id: `local-reply-${Date.now()}`,
-            author: 'You',
-            authorProfileImageUrl: '/icon48.png',
-            text,
-            publishedAt: new Date().toISOString(),
-            likeCount: 0,
-            replyCount: 0,
-            isEditable: true,
-          };
-          currentLevel.replies.push(newReply);
-        });
-      },
-
-      editComment: (path, newText) => {
-        set(state => {
-            if (!state.analysisResult) return;
-            const pathParts = path.split(':');
-            const categoryName = pathParts[0];
-
-            let currentLevel: any = state.analysisResult.categories.find(c => c.name === categoryName);
-            if (!currentLevel) return;
-
-            for (let i = 1; i < pathParts.length; i += 2) {
-                const key = pathParts[i]; // 'comments' or 'replies'
-                const index = parseInt(pathParts[i+1]);
-                if (key === 'comments') {
-                    currentLevel = currentLevel.comments[index];
-                } else if (key === 'replies') {
-                    currentLevel = currentLevel.replies[index];
-                }
-            }
-            if (currentLevel) {
-                currentLevel.text = newText;
-            }
-        });
-      },
-
-      addComment: (categoryName, text) => {
-        set(state => {
-            if (!state.analysisResult) return;
-            const category = state.analysisResult.categories.find(c => c.name === categoryName);
-            if (category) {
-                const newComment: Comment = {
-                    id: `local-comment-${Date.now()}`,
-                    author: 'You',
-                    authorProfileImageUrl: '/icon48.png',
-                    text,
-                    publishedAt: new Date().toISOString(),
-                    likeCount: 0,
-                    replyCount: 0,
-                    isEditable: true,
-                    replies: [],
-                };
-                category.comments.unshift(newComment); // Add to the top
-            }
-        });
-      },
-
-      startListening: async () => {
+      // Live Session
+      startLiveConversation: async () => {
         const { geminiApiKey } = get();
         if (!geminiApiKey) {
-            set({ liveError: 'Gemini API key is not set.' });
+            set(state => { state.liveSession.error = 'Gemini API key is not set.'; });
             return;
         }
-
-        if (get().isListening) return;
-        set({ isConnecting: true, liveError: null, transcriptions: [] });
+        set(state => {
+            state.liveSession.isActive = true;
+            state.liveSession.statusMessage = 'Initializing...';
+            state.transcription = [];
+        });
 
         try {
-            mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            startLiveConversation(geminiApiKey, {
-                onOpen: () => {
-                    set({ isConnecting: false, isListening: true });
-                    // Setup audio processing
-                    inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-                    outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-                    nextStartTime = 0;
-                    
-                    const source = inputAudioContext.createMediaStreamSource(mediaStream!);
-                    scriptProcessor = inputAudioContext.createScriptProcessor(4096, 1, 1);
-                    scriptProcessor.onaudioprocess = (audioProcessingEvent) => {
-                        const inputData = audioProcessingEvent.inputBuffer.getChannelData(0);
-                        sendAudio(inputData);
-                    };
-                    source.connect(scriptProcessor);
-                    scriptProcessor.connect(inputAudioContext.destination);
-                },
-                onMessage: async (message: LiveServerMessage) => {
-                    // Handle transcription
-                    if (message.serverContent?.inputTranscription) {
-                        const text = message.serverContent.inputTranscription.text;
-                        set(state => {
-                           const last = state.transcriptions[state.transcriptions.length - 1];
-                           if (last && last.speaker === 'user' && !message.serverContent?.turnComplete) {
-                               last.text += text;
-                           } else {
-                               state.transcriptions.push({ speaker: 'user', text });
-                           }
-                        });
-                    }
-                    if (message.serverContent?.outputTranscription) {
-                        const text = message.serverContent.outputTranscription.text;
-                         set(state => {
-                           const last = state.transcriptions[state.transcriptions.length - 1];
-                           if (last && last.speaker === 'model' && !message.serverContent?.turnComplete) {
-                               last.text += text;
-                           } else {
-                               state.transcriptions.push({ speaker: 'model', text });
-                           }
-                        });
-                    }
-
-                    // Handle audio playback
-                    const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-                    if (base64Audio && outputAudioContext) {
-                        nextStartTime = Math.max(nextStartTime, outputAudioContext.currentTime);
-                        const audioBuffer = await decodeAudioData(decode(base64Audio), outputAudioContext, 24000, 1);
-                        const source = outputAudioContext.createBufferSource();
-                        source.buffer = audioBuffer;
-                        source.connect(outputAudioContext.destination);
-                        source.addEventListener('ended', () => sources.delete(source));
-                        source.start(nextStartTime);
-                        nextStartTime += audioBuffer.duration;
-                        sources.add(source);
-                    }
-                     if (message.serverContent?.interrupted) {
-                        for (const source of sources.values()) {
-                            source.stop();
-                            sources.delete(source);
-                        }
-                        nextStartTime = 0;
-                    }
-                },
-                onError: (e) => {
-                    console.error('Live conversation error:', e);
-                    set({ isConnecting: false, isListening: false, liveError: 'Connection error. Please try again.' });
-                    get().stopListening();
-                },
-                onClose: () => {
-                    set({ isConnecting: false, isListening: false });
-                },
+            await liveService.startLiveSession(geminiApiKey, {
+                onListening: () => set(state => { 
+                    state.liveSession.isListening = true;
+                    state.liveSession.isSpeaking = false;
+                    state.liveSession.statusMessage = 'Listening...';
+                }),
+                onSpeaking: () => set(state => { 
+                    state.liveSession.isListening = false;
+                    state.liveSession.isSpeaking = true;
+                    state.liveSession.statusMessage = 'Speaking...';
+                }),
+                onIdle: () => set(state => {
+                    state.liveSession.isListening = true; // Go back to listening when model is done
+                    state.liveSession.isSpeaking = false;
+                    state.liveSession.statusMessage = 'Listening...';
+                }),
+                onTranscription: (turn) => set(state => { state.transcription.push(turn); }),
+                onError: (message) => set(state => {
+                    state.liveSession.error = message;
+                    state.liveSession.isActive = false;
+                    state.liveSession.statusMessage = 'Error';
+                }),
             });
-
-        } catch (err) {
-            console.error('Error starting microphone:', err);
-            set({ isConnecting: false, liveError: 'Could not access microphone.' });
+        } catch (e: any) {
+             set(state => {
+                state.liveSession.error = e.message;
+                state.liveSession.isActive = false;
+                state.liveSession.statusMessage = 'Error';
+            });
         }
       },
 
-      stopListening: () => {
-        stopLiveConversation();
-        mediaStream?.getTracks().forEach(track => track.stop());
-        scriptProcessor?.disconnect();
-        inputAudioContext?.close();
-        outputAudioContext?.close();
-
-        mediaStream = null;
-        scriptProcessor = null;
-        inputAudioContext = null;
-        outputAudioContext = null;
-        nextStartTime = 0;
-        sources.clear();
-        
-        set({ isListening: false, isConnecting: false });
+      stopLiveConversation: () => {
+        liveService.stopLiveSession();
+        set(state => {
+            state.liveSession = initialState.liveSession;
+        });
       },
 
     })),
     {
       name: 'comment-analyzer-storage',
       storage: createJSONStorage(() => ({
-        // Use chrome.storage.local for persistence in the extension
-        getItem: (name) =>
-          new Promise((resolve) => {
-            chrome.storage.local.get([name], (result: any) => {
-              resolve(result[name] ? JSON.stringify(result[name]) : null);
+        getItem: async (name) => {
+            return new Promise(resolve => {
+                chrome.storage.local.get([name], (result) => {
+                    resolve(result[name] ?? null);
+                });
             });
-          }),
-        setItem: (name, value) =>
-          new Promise<void>((resolve) => {
-            chrome.storage.local.set({ [name]: JSON.parse(value) }, () => {
-              resolve();
-            });
-          }),
-        removeItem: (name) =>
-          new Promise<void>((resolve) => {
-            chrome.storage.local.remove([name], () => {
-              resolve();
-            });
-          }),
+        },
+        setItem: (name, value) => {
+            chrome.storage.local.set({ [name]: value });
+        },
+        removeItem: (name) => {
+            chrome.storage.local.remove(name);
+        },
       })),
-      // Only persist API keys and settings, not transient state
-      partialize: (state) => ({ 
+      partialize: (state) => ({
         youtubeApiKey: state.youtubeApiKey,
         geminiApiKey: state.geminiApiKey,
-        commentLimit: state.commentLimit
+        commentLimit: state.commentLimit,
       }),
     }
   )

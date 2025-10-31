@@ -1,6 +1,7 @@
+
 import React from 'react';
-import { useAppStore } from '../../store';
-import { LoaderIcon } from '../Icons';
+import { useAppStore } from '../../src/store';
+import { LoaderIcon } from '../../src/components/Icons';
 
 const statusMessages: Record<string, string> = {
   fetching: 'Fetching comments from YouTube...',

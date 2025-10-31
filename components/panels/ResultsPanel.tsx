@@ -1,18 +1,18 @@
 
 import React from 'react';
-import { useAppStore } from '../../store';
-import { StatsCard } from '../StatsCard';
-import { CategoryAccordion } from '../CategoryAccordion';
-import { formatDuration } from '../../utils';
+import { useAppStore } from '../../src/store';
+import { StatsCard } from '../../src/components/StatsCard';
+import { CategoryAccordion } from '../../src/components/CategoryAccordion';
+import { formatDuration } from '../../src/utils';
 import {
   ChatBubbleBottomCenterTextIcon,
   ClockIcon,
   HeartIcon,
   MagnifyingGlassIcon,
-} from '../Icons';
-import { ExportControls } from '../ExportControls';
-import { DonationCTA } from '../DonationCTA';
-import { LiveConversation } from '../LiveConversation';
+} from '../../src/components/Icons';
+import { ExportControls } from '../../src/components/ExportControls';
+import { DonationCTA } from '../../src/components/DonationCTA';
+import { LiveConversation } from '../../src/components/LiveConversation';
 
 export const ResultsPanel: React.FC = () => {
   const { results, stats, analyze, videoId } = useAppStore();

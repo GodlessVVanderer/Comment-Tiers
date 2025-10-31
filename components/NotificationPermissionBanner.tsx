@@ -1,1 +1,5 @@
-full contents of components/NotificationPermissionBanner.tsx
+import React from 'react';
+
+export const NotificationPermissionBanner: React.FC = () => {
+  return null;
+};

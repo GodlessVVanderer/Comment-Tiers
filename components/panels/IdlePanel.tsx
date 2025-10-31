@@ -1,7 +1,8 @@
+
 import React from 'react';
-import { useAppStore } from '../../store';
-import { COMMENT_LIMIT_OPTIONS } from '../../constants';
-import { WandIcon } from '../Icons';
+import { useAppStore } from '../../src/store';
+import { COMMENT_LIMIT_OPTIONS } from '../../src/constants';
+import { WandIcon } from '../../src/components/Icons';
 
 export const IdlePanel = () => {
   const { commentLimit, setCommentLimit, analyze, videoId } = useAppStore();
