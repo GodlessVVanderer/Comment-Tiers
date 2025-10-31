@@ -1,86 +1,101 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
+import { useAppStore } from './store';
+import './style.css';
 import ApiKeyHelpModal from './components/ApiKeyHelpModal';
 import GeminiApiKeyHelpModal from './components/GeminiApiKeyHelpModal';
-import './style.css';
 
 const Options = () => {
-  const [youtubeApiKey, setYoutubeApiKey] = useState('');
-  const [geminiApiKey, setGeminiApiKey] = useState('');
-  const [status, setStatus] = useState('');
-  const [isYoutubeHelpVisible, setYoutubeHelpVisible] = useState(false);
-  const [isGeminiHelpVisible, setGeminiHelpVisible] = useState(false);
+  const { 
+    youtubeApiKey, 
+    geminiApiKey,
+    isHelpModalOpen,
+    isGeminiHelpModalOpen,
+    actions 
+  } = useAppStore();
 
+  // Temporary local state for input fields
+  const [localYoutubeKey, setLocalYoutubeKey] = React.useState(youtubeApiKey || '');
+  const [localGeminiKey, setLocalGeminiKey] = React.useState(geminiApiKey || '');
+  const [saved, setSaved] = React.useState(false);
+
+  // Sync local state when persisted state loads
   useEffect(() => {
-    chrome.storage.sync.get(['youtubeApiKey', 'geminiApiKey'], (result) => {
-      if (result.youtubeApiKey) {
-        setYoutubeApiKey(result.youtubeApiKey);
-      }
-      if (result.geminiApiKey) {
-        setGeminiApiKey(result.geminiApiKey);
-      }
-    });
-  }, []);
+    setLocalYoutubeKey(youtubeApiKey || '');
+    setLocalGeminiKey(geminiApiKey || '');
+  }, [youtubeApiKey, geminiApiKey]);
 
-  const saveKeys = () => {
-    chrome.storage.sync.set({ youtubeApiKey, geminiApiKey }, () => {
-      setStatus('API keys saved successfully!');
-      setTimeout(() => setStatus(''), 3000);
-    });
+  const handleSave = () => {
+    actions.setYoutubeApiKey(localYoutubeKey);
+    actions.setGeminiApiKey(localGeminiKey);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   return (
-    <div className="w-full h-full p-8 bg-gray-900 text-gray-300 font-sans flex items-center justify-center">
-      <div className="w-[500px]">
-        <h1 className="text-2xl font-bold text-white mb-6">Settings</h1>
-        
-        <div className="mb-6">
-          <label htmlFor="youtube-api-key" className="block text-sm font-medium text-gray-400 mb-2">YouTube Data API Key</label>
-          <div className="flex items-center">
-            <input
-              id="youtube-api-key"
-              type="password"
-              className="w-full p-2 bg-gray-800 border border-gray-700 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              value={youtubeApiKey}
-              onChange={(e) => setYoutubeApiKey(e.target.value)}
-            />
-            <button onClick={() => setYoutubeHelpVisible(true)} className="ml-2 text-blue-400 hover:underline flex-shrink-0">Help</button>
-          </div>
+    <div className="w-[500px] p-6 bg-gray-900 text-gray-300 font-sans">
+      <h1 className="text-2xl font-bold text-white mb-4">Settings</h1>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">YouTube API Key</label>
+          <input
+            type="password"
+            value={localYoutubeKey}
+            onChange={(e) => setLocalYoutubeKey(e.target.value)}
+            className="w-full bg-gray-800 border border-gray-600 rounded-md p-2 text-sm"
+          />
+           <button onClick={actions.toggleHelpModal} className="text-xs text-blue-400 hover:underline mt-1">
+            How to get a YouTube API key?
+          </button>
         </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Gemini API Key</label>
+          <input
+            type="password"
+            value={localGeminiKey}
+            onChange={(e) => setLocalGeminiKey(e.target.value)}
+            className="w-full bg-gray-800 border border-gray-600 rounded-md p-2 text-sm"
+          />
+           <button onClick={actions.toggleGeminiHelpModal} className="text-xs text-blue-400 hover:underline mt-1">
+            How to get a Gemini API key?
+          </button>
+        </div>
+      </div>
 
-        <div className="mb-6">
-          <label htmlFor="gemini-api-key" className="block text-sm font-medium text-gray-400 mb-2">Google AI Gemini API Key</label>
-          <div className="flex items-center">
-            <input
-              id="gemini-api-key"
-              type="password"
-              className="w-full p-2 bg-gray-800 border border-gray-700 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              value={geminiApiKey}
-              onChange={(e) => setGeminiApiKey(e.target.value)}
-            />
-            <button onClick={() => setGeminiHelpVisible(true)} className="ml-2 text-blue-400 hover:underline flex-shrink-0">Help</button>
-          </div>
-        </div>
-        
+      <div className="mt-6 flex items-center">
         <button
-          onClick={saveKeys}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md"
+          onClick={handleSave}
+          className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md"
         >
           Save Keys
         </button>
-
-        {status && <p className="text-green-400 text-sm mt-4 text-center">{status}</p>}
+        {saved && <span className="ml-4 text-green-400 text-sm">Settings saved!</span>}
       </div>
       
-      {isYoutubeHelpVisible && <ApiKeyHelpModal onClose={() => setYoutubeHelpVisible(false)} />}
-      {isGeminiHelpVisible && <GeminiApiKeyHelpModal onClose={() => setGeminiHelpVisible(false)} />}
+      {isHelpModalOpen && <ApiKeyHelpModal onClose={actions.toggleHelpModal} />}
+      {isGeminiHelpModalOpen && <GeminiApiKeyHelpModal onClose={actions.toggleGeminiHelpModal} />}
     </div>
   );
 };
 
-const root = ReactDOM.createRoot(document.getElementById('root')!);
-root.render(
-  <React.StrictMode>
-    <Options />
-  </React.StrictMode>
-);
+const initialize = () => {
+    const rootElement = document.getElementById('root');
+    if (!rootElement) {
+        throw new Error("Could not find root element to mount to");
+    }
+    const root = ReactDOM.createRoot(rootElement);
+
+    root.render(
+        <React.StrictMode>
+            <Options />
+        </React.StrictMode>
+    );
+};
+
+// Use DOMContentLoaded to ensure the script runs after the DOM is ready.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initialize);
+} else {
+    initialize();
+}

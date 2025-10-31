@@ -2,52 +2,82 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './style.css';
+// @ts-ignore
+import styles from './style.css?inline';
 
-const injectApp = () => {
-    const existingRoot = document.getElementById('youtube-comment-analyzer-root');
-    if (existingRoot) {
-        return; // App already injected
-    }
+const APP_ROOT_ID = 'youtube-comment-analyzer-root';
 
-    const container = document.createElement('div');
-    container.id = 'youtube-comment-analyzer-root';
+let root: ReactDOM.Root | null = null;
+let appContainer: HTMLElement | null = null;
 
-    // This selector targets the area above the comments section on YouTube.
-    // It might need updates if YouTube changes its page structure.
-    const pivot = document.querySelector('#comments');
-    if (pivot) {
-        pivot.before(container);
-        const root = ReactDOM.createRoot(container);
-        root.render(
-            <React.StrictMode>
-                <App />
-            </React.StrictMode>
-        );
-    } else {
-        console.warn("Comment Analyzer: Could not find YouTube comments section to attach to.");
-    }
+const mountApp = (target: Element) => {
+  if (appContainer) {
+    unmountApp();
+  }
+
+  appContainer = document.createElement('div');
+  appContainer.id = APP_ROOT_ID;
+  target.parentElement?.insertBefore(appContainer, target);
+
+  const shadowRoot = appContainer.attachShadow({ mode: 'open' });
+  const appRootDiv = document.createElement('div');
+  shadowRoot.appendChild(appRootDiv);
+
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = styles;
+  shadowRoot.appendChild(styleSheet);
+
+  const videoId = new URLSearchParams(window.location.search).get('v');
+  if (videoId) {
+    root = ReactDOM.createRoot(appRootDiv);
+    root.render(
+      <React.StrictMode>
+        <App videoId={videoId} />
+      </React.StrictMode>
+    );
+  }
 };
 
-
-// Initial injection
-injectApp();
-
-// YouTube uses a lot of dynamic navigation (SPA). We need to re-inject the app on navigation.
-// We can use a MutationObserver on the body or a more specific element,
-// but for simplicity, we'll listen for a custom event or use an interval.
-// A more robust solution would observe URL changes.
-
-let lastUrl = location.href; 
-new MutationObserver(() => {
-  const url = location.href;
-  if (url !== lastUrl) {
-    lastUrl = url;
-    // URL changed, we might be on a new video page.
-    const existingRoot = document.getElementById('youtube-comment-analyzer-root');
-    if (existingRoot) {
-        existingRoot.remove();
-    }
-    // Attempt to inject again after a short delay to allow the page to render.
-    setTimeout(injectApp, 1000);
+const unmountApp = () => {
+  if (root) {
+    root.unmount();
+    root = null;
   }
-}).observe(document.body, {subtree: true, childList: true});
+  if (appContainer) {
+    appContainer.remove();
+    appContainer = null;
+  }
+};
+
+const observer = new MutationObserver(() => {
+  const commentsHeader = document.querySelector('ytd-comments-header-renderer');
+  const existingApp = document.getElementById(APP_ROOT_ID);
+  
+  if (commentsHeader && !existingApp) {
+    mountApp(commentsHeader);
+  }
+});
+
+const startObserver = () => {
+  observer.observe(document.body, { childList: true, subtree: true });
+};
+
+// Handle YouTube's SPA navigation
+document.addEventListener('yt-navigate-finish', () => {
+    unmountApp();
+    // A small delay to allow YouTube's new page to render
+    setTimeout(() => {
+        const commentsHeader = document.querySelector('ytd-comments-header-renderer');
+        if(commentsHeader){
+            mountApp(commentsHeader);
+        }
+    }, 500);
+});
+
+
+startObserver();
+// Initial check in case the page is already loaded
+const initialCommentsHeader = document.querySelector('ytd-comments-header-renderer');
+if (initialCommentsHeader) {
+    mountApp(initialCommentsHeader);
+}

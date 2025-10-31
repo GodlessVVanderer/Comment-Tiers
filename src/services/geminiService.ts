@@ -1,96 +1,131 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, HarmCategory, HarmBlockThreshold, Type } from "@google/genai";
+// Fix: Removed CONCURRENCY_LIMIT as it is not exported from constants.ts and not used in this file.
+import { COMMENT_CATEGORIES } from '../constants';
 import { Comment, AnalysisResults, CommentCategory } from '../types';
-import { GEMINI_MODEL } from '../constants';
 
-export async function analyzeComments(comments: Comment[], apiKey: string): Promise<AnalysisResults> {
-  // Fix: Correctly initialize GoogleGenAI with a named apiKey object.
-  const ai = new GoogleGenAI({apiKey});
+const responseSchema = {
+  type: Type.OBJECT,
+  properties: {
+    summary: {
+      type: Type.STRING,
+      description: 'A brief, one-sentence summary of the overall tone of the comments provided.',
+    },
+    sentiment: {
+      type: Type.OBJECT,
+      properties: {
+        positive: { type: Type.NUMBER, description: 'Percentage of comments that are positive (0-100)' },
+        negative: { type: Type.NUMBER, description: 'Percentage of comments that are negative (0-100)' },
+        neutral: { type: Type.NUMBER, description: 'Percentage of comments that are neutral (0-100)' },
+      },
+      required: ['positive', 'negative', 'neutral'],
+    },
+    categories: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          category: {
+            type: Type.STRING,
+            description: `The name of the category. Must be one of: ${COMMENT_CATEGORIES.map(c => c.name).join(', ')}`,
+          },
+          comments: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING, description: 'The unique ID of the comment.' },
+                text: { type: Type.STRING, description: 'The full text of the comment.' },
+              },
+              required: ['id', 'text'],
+            },
+          },
+          summary: {
+            type: Type.STRING,
+            description: 'A one-sentence summary of the comments in this category.',
+          },
+        },
+        required: ['category', 'comments', 'summary'],
+      },
+    },
+  },
+  required: ['summary', 'sentiment', 'categories'],
+};
 
+
+const safetySettings = [
+  {
+    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
+  },
+];
+
+export async function analyzeComments(
+  comments: Comment[],
+  geminiApiKey: string,
+): Promise<AnalysisResults> {
+  const ai = new GoogleGenAI({ apiKey: geminiApiKey });
   const prompt = `
-    Analyze the following YouTube comments for the video. Your task is to provide a comprehensive analysis.
-
-    1.  **Overall Summary**: Write a brief, neutral summary of the general sentiment and main topics discussed in the comments.
-    2.  **Categorization**: Group the comments into relevant categories such as "Questions", "Positive Feedback", "Negative Feedback", "Suggestions", and "Off-topic/Spam". For each category, provide a short summary and include the original comments that fall into that category. Pass through all original comment fields.
-    3.  **Sentiment Analysis**: Calculate the overall sentiment distribution as percentages for positive, negative, and neutral comments. The total should add up to 100.
-
+    Analyze the following YouTube comments. Provide a main summary, sentiment analysis (positive, negative, neutral percentages), and categorize the comments into the following groups: ${COMMENT_CATEGORIES.map(c => c.name).join(', ')}.
+    
+    For each category, provide a one-sentence summary and a list of the comments that fit into it, including their original ID and text.
+    
     Here are the comments:
-    ${JSON.stringify(comments)}
+    ${JSON.stringify(comments.map(c => ({ id: c.id, text: c.text })))}
   `;
 
-  const responseSchema = {
-    type: Type.OBJECT,
-    properties: {
-      summary: {
-        type: Type.STRING,
-        description: "A general summary of all comments."
-      },
-      categories: {
-        type: Type.ARRAY,
-        description: "Categorized comments.",
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            category: { type: Type.STRING, description: "e.g., 'Positive Feedback', 'Questions', etc." },
-            summary: { type: Type.STRING, description: "A summary for this category." },
-            comments: {
-              type: Type.ARRAY,
-              description: "The comments belonging to this category.",
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  author: { type: Type.STRING },
-                  text: { type: Type.STRING },
-                  likeCount: { type: Type.INTEGER },
-                  publishedAt: { type: Type.STRING },
-                  authorProfileImageUrl: { type: Type.STRING },
-                },
-                required: ["id", "author", "text", "likeCount", "publishedAt", "authorProfileImageUrl"],
-              }
-            }
-          },
-          required: ["category", "summary", "comments"],
-        }
-      },
-      sentiment: {
-        type: Type.OBJECT,
-        description: "Overall sentiment analysis as percentages.",
-        properties: {
-          positive: { type: Type.NUMBER, description: "Percentage of positive comments (0-100)." },
-          negative: { type: Type.NUMBER, description: "Percentage of negative comments (0-100)." },
-          neutral: { type: Type.NUMBER, description: "Percentage of neutral comments (0-100)." },
-        },
-        required: ["positive", "negative", "neutral"],
-      }
-    },
-    required: ["summary", "categories", "sentiment"],
-  };
-
-  const response = await ai.models.generateContent({
-    model: GEMINI_MODEL,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: responseSchema,
-      temperature: 0.2,
-    },
-  });
-
   try {
-    const text = response.text.trim();
-    const parsedJson = JSON.parse(text);
-
-    const commentsById = new Map(comments.map(c => [c.id, c]));
-    
-    parsedJson.categories.forEach((category: CommentCategory) => {
-        category.comments = category.comments
-            .map((comment: any) => commentsById.get(comment.id))
-            .filter((c): c is Comment => c !== undefined);
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      // Fix: Moved safetySettings into the config object to align with the GenerateContentParameters type.
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: responseSchema,
+        safetySettings,
+      },
     });
 
-    return parsedJson as AnalysisResults;
-  } catch (e) {
-    console.error("Failed to parse Gemini response:", e, "Raw response:", response.text);
-    throw new Error("Could not parse the analysis from the AI. The response might be malformed.");
+    const jsonString = response.text?.trim() ?? '';
+    if (!jsonString) {
+      throw new Error('Gemini API returned an empty response.');
+    }
+    
+    const parsed = JSON.parse(jsonString);
+
+    // Map the comment IDs from the result back to the full comment objects
+    const categorizedComments = parsed.categories.map((category: any) => {
+        const fullComments = category.comments.map((comment: any) => {
+            return comments.find(c => c.id === comment.id);
+        }).filter(Boolean); // Filter out any undefined if a comment ID was not found
+
+        return {
+            ...category,
+            comments: fullComments,
+        };
+    });
+
+    return {
+        ...parsed,
+        categories: categorizedComments,
+    };
+
+  } catch (error) {
+    console.error('Gemini API error:', error);
+    if (error instanceof Error && error.message.includes('API key not valid')) {
+        throw new Error('GEMINI_INVALID_KEY');
+    }
+    throw new Error('Failed to analyze comments with Gemini.');
   }
 }
