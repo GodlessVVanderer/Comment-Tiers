@@ -1,14 +1,17 @@
 import React from 'react';
-import { AnalysisResults } from '../types';
+// FIX: Use relative paths for imports
+import { Category } from '../types';
+import { ArrowDownTrayIcon } from './Icons';
 
 interface ExportControlsProps {
-  results: AnalysisResults;
+  categories: Category[];
 }
 
-const ExportControls: React.FC<ExportControlsProps> = ({ results }) => {
+const ExportControls: React.FC<ExportControlsProps> = ({ categories }) => {
+  
   const handleExportJson = () => {
     const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
-      JSON.stringify(results, null, 2)
+      JSON.stringify(categories, null, 2)
     )}`;
     const link = document.createElement('a');
     link.href = jsonString;
@@ -16,13 +19,48 @@ const ExportControls: React.FC<ExportControlsProps> = ({ results }) => {
     link.click();
   };
 
+  const convertToCSV = () => {
+    let csv = 'Category,Summary,Comment Author,Comment Text,Likes,Published At\n';
+    categories.forEach(category => {
+        category.comments.forEach(comment => {
+            const row = [
+                `"${category.category}"`,
+                `"${category.summary.replace(/"/g, '""')}"`,
+                `"${comment.author.replace(/"/g, '""')}"`,
+                `"${comment.text.replace(/"/g, '""')}"`,
+                comment.likeCount,
+                comment.publishedAt
+            ].join(',');
+            csv += row + '\n';
+        });
+    });
+    return csv;
+  };
+
+  const handleExportCsv = () => {
+    const csvString = `data:text/csv;charset=utf-8,${encodeURIComponent(convertToCSV())}`;
+    const link = document.createElement('a');
+    link.href = csvString;
+    link.download = 'comment-analysis.csv';
+    link.click();
+  };
+
+
   return (
-    <div className="mt-6 border-t border-gray-700 pt-4 flex justify-end">
+    <div className="mt-6 border-t border-gray-700 pt-4 flex justify-end gap-4">
       <button
         onClick={handleExportJson}
-        className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md"
+        className="flex items-center bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md"
       >
+        <ArrowDownTrayIcon className="mr-2" />
         Export as JSON
+      </button>
+      <button
+        onClick={handleExportCsv}
+        className="flex items-center bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md"
+      >
+        <ArrowDownTrayIcon className="mr-2" />
+        Export as CSV
       </button>
     </div>
   );

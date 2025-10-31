@@ -1,11 +1,2 @@
-export const GEMINI_MODEL = 'gemini-2.5-flash';
-export const YOUTUBE_API_BASE_URL = 'https://www.googleapis.com/youtube/v3/';
-
-// Fix: Added missing COMMENT_CATEGORIES export.
-export const COMMENT_CATEGORIES = [
-    { name: 'Positive Feedback' },
-    { name: 'Negative Feedback' },
-    { name: 'Questions' },
-    { name: 'Suggestions' },
-    { name: 'Off-topic' },
-];
+export const COMMENT_LIMIT_OPTIONS = [1000, 2000, 5000, 10000];
+export const DEFAULT_COMMENT_LIMIT = 2000;

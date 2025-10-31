@@ -1,131 +1,118 @@
-import { GoogleGenAI, HarmCategory, HarmBlockThreshold, Type } from "@google/genai";
-// Fix: Removed CONCURRENCY_LIMIT as it is not exported from constants.ts and not used in this file.
-import { COMMENT_CATEGORIES } from '../constants';
-import { Comment, AnalysisResults, CommentCategory } from '../types';
+import { GoogleGenAI, GenerateContentResponse, Type } from '@google/genai';
+import { Category, Comment } from '../types';
 
-const responseSchema = {
-  type: Type.OBJECT,
-  properties: {
-    summary: {
-      type: Type.STRING,
-      description: 'A brief, one-sentence summary of the overall tone of the comments provided.',
-    },
-    sentiment: {
-      type: Type.OBJECT,
-      properties: {
-        positive: { type: Type.NUMBER, description: 'Percentage of comments that are positive (0-100)' },
-        negative: { type: Type.NUMBER, description: 'Percentage of comments that are negative (0-100)' },
-        neutral: { type: Type.NUMBER, description: 'Percentage of comments that are neutral (0-100)' },
-      },
-      required: ['positive', 'negative', 'neutral'],
-    },
-    categories: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          category: {
-            type: Type.STRING,
-            description: `The name of the category. Must be one of: ${COMMENT_CATEGORIES.map(c => c.name).join(', ')}`,
-          },
-          comments: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING, description: 'The unique ID of the comment.' },
-                text: { type: Type.STRING, description: 'The full text of the comment.' },
-              },
-              required: ['id', 'text'],
-            },
-          },
-          summary: {
-            type: Type.STRING,
-            description: 'A one-sentence summary of the comments in this category.',
-          },
-        },
-        required: ['category', 'comments', 'summary'],
-      },
-    },
-  },
-  required: ['summary', 'sentiment', 'categories'],
+let ai: GoogleGenAI | null = null;
+
+const getAiClient = (apiKey: string): GoogleGenAI => {
+    // Re-create client in case API key changes.
+    // In this app, the key is persisted and loaded once, but this is safer.
+    ai = new GoogleGenAI({ apiKey });
+    return ai;
 };
 
+const BATCH_SIZE = 50;
 
-const safetySettings = [
-  {
-    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_NONE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_NONE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_NONE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-    threshold: HarmBlockThreshold.BLOCK_NONE,
-  },
-];
+const analysisSchema = {
+    type: Type.OBJECT,
+    properties: {
+        categories: {
+            type: Type.ARRAY,
+            description: 'An array of comment categories.',
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    category: {
+                        type: Type.STRING,
+                        description: 'A concise, descriptive name for the category (e.g., "Positive Feedback", "Questions", "Bug Reports").'
+                    },
+                    summary: {
+                        type: Type.STRING,
+                        description: 'A 1-2 sentence summary of the comments in this category.'
+                    },
+                    comment_ids: {
+                        type: Type.ARRAY,
+                        description: 'An array of comment IDs belonging to this category.',
+                        items: {
+                            type: Type.STRING
+                        }
+                    }
+                },
+                required: ['category', 'summary', 'comment_ids']
+            }
+        }
+    },
+    required: ['categories']
+};
 
-export async function analyzeComments(
-  comments: Comment[],
-  geminiApiKey: string,
-): Promise<AnalysisResults> {
-  const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-  const prompt = `
-    Analyze the following YouTube comments. Provide a main summary, sentiment analysis (positive, negative, neutral percentages), and categorize the comments into the following groups: ${COMMENT_CATEGORIES.map(c => c.name).join(', ')}.
-    
-    For each category, provide a one-sentence summary and a list of the comments that fit into it, including their original ID and text.
-    
-    Here are the comments:
-    ${JSON.stringify(comments.map(c => ({ id: c.id, text: c.text })))}
-  `;
+export const analyzeComments = async (
+    comments: Comment[],
+    apiKey: string,
+    onProgress: (processed: number, total: number) => void
+): Promise<Category[]> => {
+    const aiClient = getAiClient(apiKey);
+    // FIX: Use the recommended 'gemini-2.5-flash' model instead of the deprecated 'gemini-1.5-flash'.
+    const model = 'gemini-2.5-flash';
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      // Fix: Moved safetySettings into the config object to align with the GenerateContentParameters type.
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: responseSchema,
-        safetySettings,
-      },
-    });
+    const commentMap = new Map(comments.map(c => [c.id, c]));
+    const allCategories: Record<string, Category> = {};
+    const totalBatches = Math.ceil(comments.length / BATCH_SIZE);
 
-    const jsonString = response.text?.trim() ?? '';
-    if (!jsonString) {
-      throw new Error('Gemini API returned an empty response.');
+    for (let i = 0; i < comments.length; i += BATCH_SIZE) {
+        const batch = comments.slice(i, i + BATCH_SIZE);
+        const batchNumber = (i / BATCH_SIZE) + 1;
+        onProgress(batchNumber, totalBatches);
+
+        const prompt = `
+            Analyze the following YouTube comments and group them into insightful categories.
+            For each category, provide a short summary.
+            Each comment must be assigned to one category only.
+
+            Here are the comments in JSON format (id and text only):
+            ${JSON.stringify(batch.map(c => ({ id: c.id, text: c.text })))}
+
+            Your response must be a JSON object that strictly follows the provided schema.
+        `;
+
+        try {
+            const response: GenerateContentResponse = await aiClient.models.generateContent({
+                model,
+                contents: [{ parts: [{ text: prompt }] }],
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: analysisSchema,
+                },
+            });
+
+            const jsonText = response.text.trim();
+            const result = JSON.parse(jsonText);
+            
+            if (result.categories && Array.isArray(result.categories)) {
+                for (const cat of result.categories) {
+                    if (!allCategories[cat.category]) {
+                        allCategories[cat.category] = {
+                            category: cat.category,
+                            summary: cat.summary,
+                            comments: []
+                        };
+                    }
+
+                    if (cat.comment_ids) {
+                        for (const commentId of cat.comment_ids) {
+                            const comment = commentMap.get(commentId);
+                            if (comment && !allCategories[cat.category].comments.some(c => c.id === commentId)) {
+                                allCategories[cat.category].comments.push(comment);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error(`Error processing batch ${batchNumber}:`, error);
+            if (error instanceof Error && (error.message.includes('API key not valid') || error.message.includes('400'))) {
+                 throw new Error(`Gemini API Error: Please check if your API key is correct and has billing enabled. Original error: ${error.message}`);
+            }
+        }
     }
-    
-    const parsed = JSON.parse(jsonString);
 
-    // Map the comment IDs from the result back to the full comment objects
-    const categorizedComments = parsed.categories.map((category: any) => {
-        const fullComments = category.comments.map((comment: any) => {
-            return comments.find(c => c.id === comment.id);
-        }).filter(Boolean); // Filter out any undefined if a comment ID was not found
-
-        return {
-            ...category,
-            comments: fullComments,
-        };
-    });
-
-    return {
-        ...parsed,
-        categories: categorizedComments,
-    };
-
-  } catch (error) {
-    console.error('Gemini API error:', error);
-    if (error instanceof Error && error.message.includes('API key not valid')) {
-        throw new Error('GEMINI_INVALID_KEY');
-    }
-    throw new Error('Failed to analyze comments with Gemini.');
-  }
-}
+    return Object.values(allCategories).filter(c => c.comments.length > 0);
+};
