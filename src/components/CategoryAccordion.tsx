@@ -1,110 +1,107 @@
-import React, { useState } from 'react';
-import type { Category } from '../types';
-import { ChevronDownIcon, ChatBubbleIcon, MagnifyingGlassIcon } from './Icons';
+import React, { useState, useMemo } from 'react';
+// FIX: Use relative path for local module
+import { Category, Comment } from '../types';
 import { CommentCard } from './CommentCard';
+import { ChevronUpIcon, ChevronDownIcon, PlusCircleIcon, MagnifyingGlassIcon } from './Icons';
 
-interface CategoryAccordionItemProps {
+interface CategoryAccordionProps {
   category: Category;
-  isOpen: boolean;
-  onToggle: () => void;
-  onAddReply: (path: number[], newReplyText: string) => void;
-  onEditComment: (path: number[], newText: string) => void;
+  onAddReply: (path: string, text: string) => void;
+  onEditComment: (path: string, newText: string) => void;
+  onAddComment: (categoryName: string, text: string) => void;
 }
 
-const CategoryAccordionItem: React.FC<CategoryAccordionItemProps> = ({ category, isOpen, onToggle, onAddReply, onEditComment }) => {
-  const [filter, setFilter] = useState('');
-  
-  const filteredComments = filter
-    ? category.comments.filter(comment => 
-        comment.text.toLowerCase().includes(filter.toLowerCase()) ||
-        comment.author.toLowerCase().includes(filter.toLowerCase())
-      )
-    : category.comments;
+export const CategoryAccordion: React.FC<CategoryAccordionProps> = ({ category, onAddReply, onEditComment, onAddComment }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [showAddComment, setShowAddComment] = useState(false);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [filterText, setFilterText] = useState('');
+
+  const filteredComments = useMemo(() => {
+    if (!filterText) return category.comments;
+    const lowerFilter = filterText.toLowerCase();
+    return category.comments.filter(c => 
+        c.text.toLowerCase().includes(lowerFilter) || 
+        c.author.toLowerCase().includes(lowerFilter)
+    );
+  }, [category.comments, filterText]);
+
+  if (category.comments.length === 0 && !showAddComment) return null;
+
+  const handleAddComment = () => {
+    if (newCommentText.trim()) {
+      onAddComment(category.name, newCommentText);
+      setNewCommentText('');
+      setShowAddComment(false);
+      setIsOpen(true);
+    }
+  };
 
   return (
-    <div className="border border-gray-700/80 rounded-lg overflow-hidden bg-gray-800/60 shadow-md">
+    <div className="border border-gray-700 rounded-lg overflow-hidden">
       <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between p-4 text-left focus:outline-none focus:bg-gray-700/50 transition-colors"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex justify-between items-center p-4 bg-gray-800 hover:bg-gray-700 transition-colors"
       >
-        <div className="flex items-center flex-grow min-w-0">
-          <ChatBubbleIcon className="w-5 h-5 mr-3 text-indigo-400 flex-shrink-0" />
-          <div className="flex-grow min-w-0">
-            <h3 className="font-semibold text-white truncate">{category.categoryTitle}</h3>
-            <p className="text-sm text-gray-400 mt-1">{category.summary}</p>
-          </div>
+        <div className="flex items-center">
+          <span className="text-lg mr-3">{category.icon}</span>
+          <span className="font-semibold text-white">{category.name}</span>
+          <span className="ml-2 text-sm text-gray-400">({category.comments.length})</span>
         </div>
-        <div className="flex items-center ml-4 flex-shrink-0">
-          <span className="text-sm font-bold text-gray-300 bg-gray-700/80 px-2.5 py-1 rounded-full">{category.comments.length}</span>
-          <ChevronDownIcon className={`w-5 h-5 text-gray-400 ml-3 transform transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-        </div>
+        {isOpen ? <ChevronUpIcon className="w-5 h-5" /> : <ChevronDownIcon className="w-5 h-5" />}
       </button>
       {isOpen && (
-        <div className="border-t border-gray-700/80">
-            <div className="p-4 bg-gray-900/30">
-                 <div className="relative">
+        <div className="p-4 bg-gray-900">
+            <div className="flex gap-2 mb-4">
+                <div className="relative flex-grow">
+                    <MagnifyingGlassIcon className="w-5 h-5 text-gray-400 absolute top-1/2 left-3 -translate-y-1/2"/>
                     <input
                         type="text"
                         placeholder="Filter comments..."
-                        value={filter}
-                        onChange={(e) => setFilter(e.target.value)}
-                        className="w-full p-2 pl-8 bg-gray-900/70 border border-gray-600 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                        value={filterText}
+                        onChange={(e) => setFilterText(e.target.value)}
+                        className="w-full bg-gray-800 border border-gray-600 rounded-md pl-10 pr-4 py-2 text-sm text-white focus:ring-blue-500 focus:border-blue-500"
                     />
-                    <MagnifyingGlassIcon className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                 </div>
+                <button
+                    onClick={() => setShowAddComment(!showAddComment)}
+                    className="flex-shrink-0 flex items-center px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 rounded-md"
+                >
+                    <PlusCircleIcon className="w-5 h-5 mr-1" />
+                    Add
+                </button>
             </div>
-            <div className="p-4 bg-gray-900/50">
-              <div className="space-y-4">
-                {filteredComments.map((comment, index) => {
-                  // Find the original index to maintain correct paths for actions
-                  const originalIndex = category.comments.findIndex(c => c.id === comment.id);
-                  return (
-                    <CommentCard 
-                      key={comment.id} 
-                      comment={comment}
-                      path={[originalIndex]} // Path for this top-level comment in the category
-                      onAddReply={onAddReply}
-                      onEditComment={onEditComment}
+            {showAddComment && (
+                <div className="mb-4">
+                    <textarea
+                        value={newCommentText}
+                        onChange={(e) => setNewCommentText(e.target.value)}
+                        placeholder="Write a new comment..."
+                        className="w-full bg-gray-800 border border-gray-600 rounded-md p-2 text-sm text-white"
+                        rows={3}
                     />
-                  )
-                })}
-                {filteredComments.length === 0 && (
-                    <p className="text-center text-sm text-gray-500 py-4">No comments match your filter.</p>
-                )}
-              </div>
+                    <div className="flex justify-end gap-2 mt-2">
+                        <button onClick={() => setShowAddComment(false)} className="px-3 py-1 text-sm bg-gray-600 hover:bg-gray-500 rounded">Cancel</button>
+                        <button onClick={handleAddComment} className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 rounded">Add Comment</button>
+                    </div>
+                </div>
+            )}
+            <div className="space-y-3">
+              {filteredComments.map((comment, index) => (
+                <CommentCard 
+                  key={comment.id} 
+                  comment={comment} 
+                  path={`${category.name}:${index}`}
+                  onAddReply={onAddReply}
+                  onEditComment={onEditComment}
+                />
+              ))}
+              {filteredComments.length === 0 && filterText && (
+                  <p className="text-sm text-gray-500 text-center py-4">No comments match your filter.</p>
+              )}
             </div>
         </div>
       )}
     </div>
   );
-};
-
-
-interface CategoryListProps {
-    categories: Category[];
-    onAddReply: (categoryIndex: number, path: number[], newReplyText: string) => void;
-    onEditComment: (categoryIndex: number, path: number[], newText: string) => void;
-}
-
-export const CategoryAccordion: React.FC<CategoryListProps> = ({ categories, onAddReply, onEditComment }) => {
-    const [openCategoryIndex, setOpenCategoryIndex] = useState<number | null>(0);
-
-    const handleToggle = (index: number) => {
-        setOpenCategoryIndex(openCategoryIndex === index ? null : index);
-    };
-
-    return (
-        <div className="space-y-3">
-            {categories.map((category, index) => (
-                <CategoryAccordionItem
-                    key={`${category.categoryTitle}-${index}`}
-                    category={category}
-                    isOpen={openCategoryIndex === index}
-                    onToggle={() => handleToggle(index)}
-                    onAddReply={(path, text) => onAddReply(index, path, text)}
-                    onEditComment={(path, text) => onEditComment(index, path, text)}
-                />
-            ))}
-        </div>
-    );
 };

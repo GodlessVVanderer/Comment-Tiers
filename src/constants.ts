@@ -1,32 +1,41 @@
-/**
- * Options for the maximum number of comments to fetch and analyze.
- */
-export const COMMENT_LIMIT_OPTIONS = [1000, 2000, 5000, 10000, 20000, 30000];
+// This is a placeholder for constants.ts
+// For example:
+// export const API_KEY = '...';
 
-/**
- * The number of comments to process in a single batch API call to Gemini.
- */
-export const BATCH_SIZE = 200;
+import { Category } from './types';
 
-/**
- * The number of concurrent/parallel requests to make to the Gemini API.
- */
+export const COMMENT_LIMITS = [1000, 2000, 5000, 10000, 20000, 30000];
+export const DEFAULT_COMMENT_LIMIT = 5000;
+
+export const GEMINI_BATCH_SIZE = 50;
 export const CONCURRENCY_LIMIT = 10;
+export const MIN_COMMENT_LENGTH = 15; // characters
+export const NGRAM_SPAM_THRESHOLD = 0.6; // 60% repetitive n-grams
 
-/**
- * The size of n-grams (sequence of words) to use for spam detection.
- * Used to identify repetitive phrases.
- */
-export const NGRAM_SIZE = 5;
-
-/**
- * The minimum number of times an n-gram must appear across different comments
- * to be considered potential spam.
- */
-export const NGRAM_SPAM_THRESHOLD = 2;
-
-/**
- * The minimum number of words a comment must have to be considered for analysis,
- * used as a proxy to filter out very low-effort comments.
- */
-export const MIN_WORD_COUNT = 25;
+export const CATEGORIES: Omit<Category, 'comments'>[] = [
+  {
+    name: 'Questions',
+    icon: '❓',
+    prompt: 'Comments asking questions about the video content or related topics.',
+  },
+  {
+    name: 'Feedback',
+    icon: '💡',
+    prompt: 'Comments providing feedback, suggestions, or constructive criticism.',
+  },
+  {
+    name: 'Highlights',
+    icon: '⭐',
+    prompt: 'Comments pointing out memorable moments or key takeaways from the video.',
+  },
+  {
+    name: 'Discussions',
+    icon: '💬',
+    prompt: 'Comments engaging in discussions with the creator or other viewers.',
+  },
+  {
+    name: 'Other',
+    icon: '📁',
+    prompt: 'Comments that do not fit into the other categories, such as jokes, memes, or general statements.',
+  },
+];

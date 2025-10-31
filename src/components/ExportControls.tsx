@@ -1,69 +1,64 @@
 import React from 'react';
-import type { Category, AnalysisStats } from '../types';
+// FIX: Use relative paths for local modules
+import { useStore } from '../store';
+import { Comment } from '../types';
+import { ArrowDownTrayIcon } from './Icons';
 
-interface ExportControlsProps {
-  categories: Category[];
-  stats: AnalysisStats | null;
-  videoId: string;
-}
+export const ExportControls = () => {
+  const analysisResult = useStore(state => state.analysisResult);
 
-export const ExportControls: React.FC<ExportControlsProps> = ({ categories, stats, videoId }) => {
-  if (!categories.length || !stats) {
-    return null;
-  }
-
-  const downloadJSON = () => {
-    const data = {
-      analysisStats: stats,
-      categories: categories,
-    };
-    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(data, null, 2))}`;
-    const link = document.createElement('a');
-    link.href = jsonString;
-    link.download = `youtube-comment-analysis-${videoId}.json`;
-    link.click();
+  const downloadFile = (filename: string, content: string, mimeType: string) => {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
-  const downloadCSV = () => {
-    const rows = [['Category', 'Summary', 'Comment ID', 'Author', 'Comment Text']];
-    categories.forEach(category => {
-      category.comments.forEach(comment => {
-        rows.push([
-          `"${category.categoryTitle.replace(/"/g, '""')}"`,
-          `"${category.summary.replace(/"/g, '""')}"`,
-          comment.id,
-          `"${comment.author.replace(/"/g, '""')}"`,
-          `"${comment.text.replace(/"/g, '""').replace(/\n/g, ' ')}"`,
-        ]);
-      });
+  const handleExportJson = () => {
+    if (!analysisResult) return;
+    const jsonString = JSON.stringify(analysisResult, null, 2);
+    downloadFile('comment-analysis.json', jsonString, 'application/json');
+  };
+
+  const handleExportCsv = () => {
+    if (!analysisResult) return;
+    
+    let csvContent = 'Category,Author,Date,Likes,Text,Is Reply,Reply To Author\n';
+    
+    const flattenComments = (comments: Comment[], category: string, replyToAuthor = ''): string => {
+        let csvRows = '';
+        comments.forEach(comment => {
+            const text = `"${comment.text.replace(/"/g, '""')}"`;
+            csvRows += `${category},${comment.author},${comment.publishedAt},${comment.likeCount},${text},${replyToAuthor ? 'Yes' : 'No'},${replyToAuthor}\n`;
+            if (comment.replies && comment.replies.length > 0) {
+                csvRows += flattenComments(comment.replies, category, comment.author);
+            }
+        });
+        return csvRows;
+    };
+    
+    analysisResult.categories.forEach(category => {
+        csvContent += flattenComments(category.comments, category.name);
     });
 
-    const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
-    const link = document.createElement('a');
-    link.setAttribute('href', encodeURI(csvContent));
-    link.setAttribute('download', `youtube-comment-analysis-${videoId}.csv`);
-    link.click();
+    downloadFile('comment-analysis.csv', csvContent, 'text/csv;charset=utf-8;');
   };
 
   return (
-    <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-4 my-6 shadow-lg">
-      <div className="flex flex-col sm:flex-row items-center justify-between">
-        <h3 className="text-md font-semibold text-white mb-3 sm:mb-0">Export Results</h3>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={downloadJSON}
-            className="px-4 py-2 bg-gray-700 text-indigo-300 text-sm font-medium rounded-md hover:bg-gray-600 transition-colors"
-          >
-            Export as JSON
-          </button>
-          <button
-            onClick={downloadCSV}
-            className="px-4 py-2 bg-gray-700 text-indigo-300 text-sm font-medium rounded-md hover:bg-gray-600 transition-colors"
-          >
-            Export as CSV
-          </button>
-        </div>
-      </div>
+    <div className="flex items-center space-x-2">
+      <button onClick={handleExportJson} className="flex items-center px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded">
+        <ArrowDownTrayIcon className="w-4 h-4 mr-1" />
+        JSON
+      </button>
+      <button onClick={handleExportCsv} className="flex items-center px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded">
+        <ArrowDownTrayIcon className="w-4 h-4 mr-1" />
+        CSV
+      </button>
     </div>
   );
 };

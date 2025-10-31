@@ -1,7 +1,5 @@
-
-
 import React from 'react';
-import { CloseIcon } from './Icons';
+import { XIcon } from './Icons';
 
 interface GeminiApiKeyHelpModalProps {
   isOpen: boolean;
@@ -10,61 +8,23 @@ interface GeminiApiKeyHelpModalProps {
 
 export const GeminiApiKeyHelpModal: React.FC<GeminiApiKeyHelpModalProps> = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
-
   return (
-    <div 
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div 
-        className="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl w-full max-w-lg p-6 relative text-gray-300"
-        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
-      >
-        <button 
-          onClick={onClose} 
-          className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors"
-          aria-label="Close"
-        >
-          <CloseIcon className="w-6 h-6" />
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+      <div className="bg-gray-800 p-6 rounded-lg max-w-lg w-full text-gray-300 relative">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white">
+            <XIcon className="w-6 h-6" />
         </button>
-        
-        <h2 className="text-xl font-bold text-white mb-4">How to Get a Google Gemini API Key</h2>
-        
-        <p className="mb-4 text-gray-400">
-          This tool uses the Gemini API for analysis. You can get a free API key from Google AI Studio.
-        </p>
-
-        <ol className="list-decimal list-inside space-y-3 text-sm">
-          <li>
-            Go to{' '}
-            <a 
-              href="https://aistudio.google.com/app/apikey" 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              className="text-indigo-400 hover:underline font-semibold"
-            >
-              Google AI Studio
-            </a>.
-          </li>
-          <li>
-            Click <strong>"Create API key in new project"</strong> (or use an existing one).
-          </li>
-          <li>
-            Copy the generated API key and paste it into the input field in the app.
-          </li>
+        <h2 className="text-xl font-bold text-white">How to Get a Gemini API Key</h2>
+        <ol className="list-decimal list-inside mt-4 space-y-2 text-sm">
+            <li>Go to <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">Google AI Studio</a>.</li>
+            <li>Log in with your Google account.</li>
+            <li>Click "Create API key in new project".</li>
+            <li>Copy the generated API key.</li>
         </ol>
-        
-        <div className="mt-6 p-3 rounded-md bg-yellow-900/40 border border-yellow-700 text-yellow-300">
-            <h4 className="font-bold text-sm mb-1">Security Best Practice</h4>
-            <p className="text-xs">
-                To prevent unexpected charges, it's a good idea to monitor your API usage. In the Google Cloud Console for the project linked to your key, navigate to "Billing" and set up "Budgets & alerts" to be notified of your spending.
-            </p>
+        <div className="mt-4 p-3 bg-yellow-900/50 border border-yellow-700 rounded-md">
+            <h3 className="font-semibold text-yellow-300">Security Best Practice</h3>
+            <p className="text-xs text-yellow-300/80 mt-1">The free Gemini API has generous limits, but it's wise to monitor your usage. You can do this in the Google Cloud Console for the project that was created, where you can also set up billing alerts if you upgrade to a paid plan.</p>
         </div>
-
-        <div className="mt-4 text-xs text-gray-500 bg-gray-900/50 p-3 rounded-md">
-          <strong>Note:</strong> Your API key is used directly in your browser to communicate with Google's API and is not stored or seen by us. You are responsible for any costs associated with your key.
-        </div>
-
       </div>
     </div>
   );

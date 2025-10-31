@@ -1,25 +1,29 @@
 import React from 'react';
 import { HeartIcon, CoffeeIcon } from './Icons';
 
-export const DonationCTA: React.FC = () => {
+export const DonationCTA = () => {
   return (
-    <div className="text-center mt-8 p-4 bg-gray-800/60 border border-gray-700/50 rounded-lg">
-      <h3 className="text-md font-semibold text-white flex items-center justify-center gap-2">
-        <HeartIcon className="w-5 h-5 text-red-400" />
-        Enjoying This Tool?
-      </h3>
-      <p className="text-sm text-gray-400 mt-2 mb-4 max-w-md mx-auto">
-        This is a passion project developed in my free time. If it's saved you time or provided value, a small tip would be greatly appreciated and helps keep the project alive!
-      </p>
-      <a
-        href="https://www.buymeacoffee.com/your-username" // Replace with a real link
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 px-5 py-2.5 bg-yellow-500 text-gray-900 text-sm font-bold rounded-lg hover:bg-yellow-400 transition-transform transform hover:scale-105"
-      >
-        <CoffeeIcon className="w-5 h-5" />
-        Buy Me a Coffee
-      </a>
+    <div className="bg-gray-800 p-4 rounded-lg text-center">
+      <p className="text-white font-semibold">Enjoying Comment Tiers?</p>
+      <p className="text-gray-400 text-sm mt-1">Consider supporting its development!</p>
+      <div className="flex justify-center items-center gap-4 mt-3">
+        <a 
+            href="https://github.com/sponsors/google" 
+            target="_blank" rel="noopener noreferrer"
+            className="flex items-center px-4 py-2 bg-pink-600 text-white rounded hover:bg-pink-700 text-sm"
+        >
+            <HeartIcon className="w-4 h-4 mr-2" />
+            Sponsor on GitHub
+        </a>
+        <a 
+            href="https://www.buymeacoffee.com/google" 
+            target="_blank" rel="noopener noreferrer"
+            className="flex items-center px-4 py-2 bg-yellow-500 text-black rounded hover:bg-yellow-600 text-sm"
+        >
+            <CoffeeIcon className="w-4 h-4 mr-2" />
+            Buy me a coffee
+        </a>
+      </div>
     </div>
   );
 };

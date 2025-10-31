@@ -1,105 +1,103 @@
-import type { Comment } from '../types';
+import { Comment } from '../types';
 
-const API_BASE_URL = 'https://www.googleapis.com/youtube/v3/commentThreads';
-const MAX_RESULTS_PER_PAGE = 100;
+const YOUTUBE_API_BASE_URL = 'https://www.googleapis.com/youtube/v3/';
 
-interface YouTubeCommentSnippet {
-  authorDisplayName: string;
-  textDisplay: string;
-}
+const transformComment = (item: any): Comment => {
+  const snippet = item.snippet.topLevelComment.snippet;
+  return {
+    id: item.snippet.topLevelComment.id,
+    author: snippet.authorDisplayName,
+    authorProfileImageUrl: snippet.authorProfileImageUrl,
+    text: snippet.textDisplay,
+    publishedAt: snippet.publishedAt,
+    likeCount: snippet.likeCount,
+    replyCount: item.snippet.totalReplyCount,
+    replies: [],
+  };
+};
 
-interface YouTubeComment {
-  snippet: {
-    topLevelComment: {
-      id: string;
-      snippet: YouTubeCommentSnippet;
+const transformReply = (item: any): Comment => {
+    const snippet = item.snippet;
+    return {
+      id: item.id,
+      author: snippet.authorDisplayName,
+      authorProfileImageUrl: snippet.authorProfileImageUrl,
+      text: snippet.textDisplay,
+      publishedAt: snippet.publishedAt,
+      likeCount: snippet.likeCount,
+      replyCount: 0, // Replies don't have replies of their own in this structure
     };
   };
-}
 
-export const fetchComments = async (videoId: string, apiKey: string, maxComments: number): Promise<Comment[]> => {
-  if (!apiKey || !apiKey.trim()) {
-    throw new Error('YouTube API key is missing. Please provide it in the input field.');
-  }
-
+export const fetchComments = async (
+  videoId: string,
+  apiKey: string,
+  onProgress: (percentage: number) => void,
+  limit: number
+): Promise<Comment[]> => {
   let comments: Comment[] = [];
-  let pageToken: string | undefined = undefined;
+  let nextPageToken: string | undefined = undefined;
+  const maxResults = 100; // Max allowed by API
 
   try {
-    while (comments.length < maxComments) {
-      const params = new URLSearchParams({
-        part: 'snippet',
-        videoId: videoId,
-        key: apiKey,
-        maxResults: MAX_RESULTS_PER_PAGE.toString(),
-        order: 'relevance', 
+    do {
+      const url = new URL('commentThreads', YOUTUBE_API_BASE_URL);
+      url.searchParams.append('part', 'snippet,replies');
+      url.searchParams.append('videoId', videoId);
+      url.searchParams.append('key', apiKey);
+      url.searchParams.append('maxResults', String(maxResults));
+      url.searchParams.append('order', 'relevance');
+      if (nextPageToken) {
+        url.searchParams.append('pageToken', nextPageToken);
+      }
+
+      const response = await fetch(url.toString());
+      const data = await response.json();
+
+      if (data.error) {
+        const { message, code } = data.error;
+        if (code === 403 && message.includes('quotaExceeded')) {
+          throw new Error('YOUTUBE_QUOTA_EXCEEDED');
+        }
+        if (code === 403 && message.includes('commentsDisabled')) {
+            throw new Error('YOUTUBE_COMMENTS_DISABLED');
+        }
+        if (code === 400 && message.includes('API key not valid')) {
+            throw new Error('YOUTUBE_INVALID_KEY');
+        }
+        if (code === 404) {
+            throw new Error('YOUTUBE_VIDEO_NOT_FOUND');
+        }
+        throw new Error(message || 'An unknown YouTube API error occurred.');
+      }
+
+      if (!data.items) {
+        // No more comments or comments are disabled
+        break;
+      }
+
+      const newComments = data.items.map(transformComment);
+      
+      data.items.forEach((item: any, index: number) => {
+        if (item.replies) {
+          newComments[index].replies = item.replies.comments.map(transformReply);
+        }
       });
 
-      if (pageToken) {
-        params.append('pageToken', pageToken);
-      }
+      comments = [...comments, ...newComments];
+      nextPageToken = data.nextPageToken;
 
-      const response = await fetch(`${API_BASE_URL}?${params.toString()}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        const reason = errorData.error?.errors?.[0]?.reason;
-        
-        let specificMessage = `YouTube API Error: ${errorData.error?.message || `Request failed with status ${response.status}`}`;
+      onProgress((comments.length / limit) * 100);
 
-        switch (reason) {
-            case 'quotaExceeded':
-                specificMessage = 'YOUTUBE_QUOTA_EXCEEDED';
-                break;
-            case 'videoNotFound':
-                specificMessage = 'YOUTUBE_VIDEO_NOT_FOUND';
-                break;
-            case 'commentsDisabled':
-                specificMessage = 'YOUTUBE_COMMENTS_DISABLED';
-                break;
-            case 'forbidden':
-                 if (errorData.error?.message.toLowerCase().includes('api key not valid')) {
-                    specificMessage = 'YOUTUBE_INVALID_KEY';
-                 } else {
-                    specificMessage = 'YOUTUBE_FORBIDDEN'; // Generic permission error
-                 }
-                break;
-        }
-        throw new Error(specificMessage);
-      }
+    } while (nextPageToken && comments.length < limit);
 
-      const data = await response.json();
-      
-      const newComments = data.items.map((item: YouTubeComment) => ({
-        id: item.snippet.topLevelComment.id,
-        author: item.snippet.topLevelComment.snippet.authorDisplayName,
-        text: item.snippet.topLevelComment.snippet.textDisplay,
-      }));
-      
-      comments = comments.concat(newComments);
-      
-      pageToken = data.nextPageToken;
-      if (!pageToken) {
-        break; // No more pages
-      }
+    return comments.slice(0, limit);
+  } catch (e: any) {
+    // Re-throw custom errors
+    if (e.message.startsWith('YOUTUBE_')) {
+      throw e;
     }
-  } catch (error) {
-    console.error('Error fetching YouTube comments:', error);
-    if (error instanceof Error) {
-        // Re-throw the specific error or a generic one
-        throw error;
-    }
-    throw new Error('An unknown error occurred while fetching comments.');
+    console.error('Failed to fetch YouTube comments:', e);
+    throw new Error('Failed to fetch comments. Check your network connection and API key.');
   }
-
-  // Ensure we don't return more comments than requested
-  if (comments.length > maxComments) {
-    comments = comments.slice(0, maxComments);
-  }
-
-  if (comments.length === 0 && maxComments > 0) {
-      console.warn("Fetched 0 comments. The video might have comments disabled or no comments yet.");
-  }
-
-  return comments;
 };

@@ -1,4 +1,7 @@
 {
-  "name": "YouTube Comment Categorizer",
-  "description": "An intelligent tool that takes a YouTube video's comments, filters out spam, and categorizes them into forum-like cascading tiers for easy browsing and understanding of the discussion topics."
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "name": "",
+  "description": ""
 }

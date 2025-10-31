@@ -1,118 +1,69 @@
-
-// FIX: Provide implementation for the background script.
-// This script runs in the background to handle tasks like data processing.
-
-// FIX: Define chrome for TypeScript to avoid compilation errors.
+// FIX: Add chrome type declaration to avoid TypeScript errors in a web extension context.
 declare const chrome: any;
+import { MIN_COMMENT_LENGTH, NGRAM_SPAM_THRESHOLD } from './constants';
+import { Comment } from './types';
 
-/**
- * A simplified Comment interface for use within the background script.
- * We only need id and text for pre-filtering.
- */
-interface Comment {
-  id: string;
-  text: string;
-}
+// Function to calculate n-grams and check for repetition
+const isSpam = (text: string): boolean => {
+  const n = 4; // n-gram size
+  if (text.length < n) return false;
+  
+  const ngrams = new Map<string, number>();
+  let totalNgrams = 0;
+  for (let i = 0; i <= text.length - n; i++) {
+    const ngram = text.substring(i, i + n);
+    ngrams.set(ngram, (ngrams.get(ngram) || 0) + 1);
+    totalNgrams++;
+  }
 
-/**
- * Generates n-grams (sequences of n words) from a given text.
- * @param text The input string.
- * @param n The size of the n-grams.
- * @returns An array of unique n-grams.
- */
-const generateNgrams = (text: string, n: number): string[] => {
-  const words = text.toLowerCase().split(/\s+/).filter(Boolean);
-  const ngrams = new Set<string>();
-  if (words.length >= n) {
-    for (let i = 0; i <= words.length - n; i++) {
-      ngrams.add(words.slice(i, i + n).join(' '));
+  if (totalNgrams === 0) return false;
+
+  let repetitiveCount = 0;
+  for (const count of ngrams.values()) {
+    if (count > 1) {
+      repetitiveCount += count - 1;
     }
   }
-  return Array.from(ngrams);
+  
+  return (repetitiveCount / totalNgrams) > NGRAM_SPAM_THRESHOLD;
 };
 
-/**
- * Prefilters a list of comments to remove low-effort content and potential spam.
- * @param comments The array of comments to filter.
- * @param minWordCount The minimum number of words a comment must have.
- * @param ngramSize The size of n-grams to use for spam detection.
- * @param spamThreshold The number of times an n-gram must appear to be considered spam.
- * @returns A new array of filtered comments.
- */
-const prefilterComments = (
-  comments: Comment[],
-  minWordCount: number,
-  ngramSize: number,
-  spamThreshold: number
-): Comment[] => {
-  // 1. Filter by minimum word count.
-  const contentfulComments = comments.filter(
-    (comment) => comment.text.split(/\s+/).length >= minWordCount
-  );
+const prefilterComments = (comments: Comment[]): { filteredComments: Comment[], totalFiltered: number } => {
+  const seenComments = new Set<string>();
+  const filteredComments = comments.filter(comment => {
+    // Basic length check
+    if (comment.text.length < MIN_COMMENT_LENGTH) return false;
+    
+    // Check for repetitive n-grams
+    if (isSpam(comment.text.toLowerCase())) return false;
 
-  // 2. Identify repetitive spam using n-grams.
-  const ngramCounts = new Map<string, number>();
-  const commentNgrams = new Map<string, string[]>();
+    // Check for exact duplicates
+    const normalizedText = comment.text.toLowerCase().trim();
+    if (seenComments.has(normalizedText)) return false;
 
-  // Generate n-grams for each comment and count their global occurrences.
-  for (const comment of contentfulComments) {
-    const ngrams = generateNgrams(comment.text, ngramSize);
-    commentNgrams.set(comment.id, ngrams);
-    for (const ngram of ngrams) {
-      ngramCounts.set(ngram, (ngramCounts.get(ngram) || 0) + 1);
-    }
-  }
-
-  // Identify n-grams that appear more often than the spam threshold.
-  const spamNgrams = new Set<string>();
-  for (const [ngram, count] of ngramCounts.entries()) {
-    if (count >= spamThreshold) {
-      spamNgrams.add(ngram);
-    }
-  }
-
-  // 3. Filter out comments that contain any of the identified spam n-grams.
-  const filteredComments = contentfulComments.filter((comment) => {
-    const ngrams = commentNgrams.get(comment.id) || [];
-    for (const ngram of ngrams) {
-      if (spamNgrams.has(ngram)) {
-        return false; // This comment is considered spam.
-      }
-    }
+    seenComments.add(normalizedText);
     return true;
   });
 
-  return filteredComments;
+  return { filteredComments, totalFiltered: comments.length - filteredComments.length };
 };
 
-// Listen for messages from other parts of the extension.
-chrome.runtime.onMessage.addListener(
-  (
-    request: { action: string; payload: any },
-    // FIX: Changed sender type from `chrome.runtime.MessageSender` to `any` to resolve namespace error.
-    sender: any,
-    sendResponse: (response: any) => void
-  ) => {
-    if (request.action === 'prefilter-comments') {
-      const { comments, minWordCount, ngramSize, spamThreshold } = request.payload;
-      try {
-        const filtered = prefilterComments(
-          comments,
-          minWordCount,
-          ngramSize,
-          spamThreshold
-        );
-        sendResponse(filtered);
-      } catch (error) {
-        console.error('Error during pre-filtering:', error);
-        sendResponse([]); // Send back an empty array on error
-      }
-      // Return true to indicate that the response will be sent asynchronously.
-      return true;
-    }
 
-    if (request.action === 'open-options-page') {
-      chrome.runtime.openOptionsPage();
-    }
+chrome.runtime.onMessage.addListener((request: any, sender: any, sendResponse: (response?: any) => void) => {
+  if (request.action === 'openOptionsPage') {
+    chrome.runtime.openOptionsPage();
+    return true;
   }
-);
+
+  if (request.action === 'prefilter-comments') {
+    const { comments } = request.payload;
+    const result = prefilterComments(comments);
+    sendResponse(result);
+    return true; // Indicates async response
+  }
+  
+  if (request.action === 'injection-failed') {
+    console.error('[Comment Tiers] Content script failed to inject. YouTube page structure may have changed.', request.payload.error);
+    return true;
+  }
+});
