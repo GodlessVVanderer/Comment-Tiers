@@ -1,12 +1,10 @@
-/// <reference types="chrome" />
+// FIX: Remove reference to chrome types which are unavailable in this environment.
+// FIX: Add chrome declaration to satisfy TypeScript when types are not available.
+declare const chrome: any;
 
-// This file is the service worker for the extension.
-// It runs in the background and handles events.
-
-// A listener for messages from other parts of the extension.
+// FIX: Implement background script to handle opening options page.
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'openOptionsPage') {
+  if (request.action === "openOptionsPage") {
     chrome.runtime.openOptionsPage();
   }
-  return true; // Indicates you wish to send a response asynchronously
 });

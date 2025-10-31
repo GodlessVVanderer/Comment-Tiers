@@ -1,118 +1,124 @@
-import { GoogleGenAI, GenerateContentResponse, Type } from '@google/genai';
-import { Category, Comment } from '../types';
+// FIX: Implement Gemini service for comment analysis and summarization.
+import { GoogleGenAI, Type } from "@google/genai";
+import { COMMENT_CATEGORIES } from "../constants";
+import { Category, Comment } from "../types";
 
-let ai: GoogleGenAI | null = null;
+// FIX: Create a custom error class to handle specific error codes and causes.
+class GeminiServiceError extends Error {
+    cause: string;
 
-const getAiClient = (apiKey: string): GoogleGenAI => {
-    // Re-create client in case API key changes.
-    // In this app, the key is persisted and loaded once, but this is safer.
-    ai = new GoogleGenAI({ apiKey });
-    return ai;
-};
-
-const BATCH_SIZE = 50;
+    constructor(message: string, cause: string) {
+        super(message);
+        this.name = 'GeminiServiceError';
+        this.cause = cause;
+    }
+}
 
 const analysisSchema = {
+  type: Type.ARRAY,
+  items: {
     type: Type.OBJECT,
     properties: {
-        categories: {
-            type: Type.ARRAY,
-            description: 'An array of comment categories.',
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    category: {
-                        type: Type.STRING,
-                        description: 'A concise, descriptive name for the category (e.g., "Positive Feedback", "Questions", "Bug Reports").'
-                    },
-                    summary: {
-                        type: Type.STRING,
-                        description: 'A 1-2 sentence summary of the comments in this category.'
-                    },
-                    comment_ids: {
-                        type: Type.ARRAY,
-                        description: 'An array of comment IDs belonging to this category.',
-                        items: {
-                            type: Type.STRING
-                        }
-                    }
-                },
-                required: ['category', 'summary', 'comment_ids']
-            }
-        }
+      category: {
+        type: Type.STRING,
+        enum: COMMENT_CATEGORIES.map(c => c.name),
+      },
+      comment_ids: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.STRING,
+        },
+      },
     },
-    required: ['categories']
+    required: ["category", "comment_ids"],
+  },
 };
 
-export const analyzeComments = async (
-    comments: Comment[],
-    apiKey: string,
-    onProgress: (processed: number, total: number) => void
-): Promise<Category[]> => {
-    const aiClient = getAiClient(apiKey);
-    // FIX: Use the recommended 'gemini-2.5-flash' model instead of the deprecated 'gemini-1.5-flash'.
-    const model = 'gemini-2.5-flash';
-
-    const commentMap = new Map(comments.map(c => [c.id, c]));
-    const allCategories: Record<string, Category> = {};
-    const totalBatches = Math.ceil(comments.length / BATCH_SIZE);
-
-    for (let i = 0; i < comments.length; i += BATCH_SIZE) {
-        const batch = comments.slice(i, i + BATCH_SIZE);
-        const batchNumber = (i / BATCH_SIZE) + 1;
-        onProgress(batchNumber, totalBatches);
-
-        const prompt = `
-            Analyze the following YouTube comments and group them into insightful categories.
-            For each category, provide a short summary.
-            Each comment must be assigned to one category only.
-
-            Here are the comments in JSON format (id and text only):
-            ${JSON.stringify(batch.map(c => ({ id: c.id, text: c.text })))}
-
-            Your response must be a JSON object that strictly follows the provided schema.
-        `;
-
-        try {
-            const response: GenerateContentResponse = await aiClient.models.generateContent({
-                model,
-                contents: [{ parts: [{ text: prompt }] }],
-                config: {
-                    responseMimeType: 'application/json',
-                    responseSchema: analysisSchema,
-                },
-            });
-
-            const jsonText = response.text.trim();
-            const result = JSON.parse(jsonText);
-            
-            if (result.categories && Array.isArray(result.categories)) {
-                for (const cat of result.categories) {
-                    if (!allCategories[cat.category]) {
-                        allCategories[cat.category] = {
-                            category: cat.category,
-                            summary: cat.summary,
-                            comments: []
-                        };
-                    }
-
-                    if (cat.comment_ids) {
-                        for (const commentId of cat.comment_ids) {
-                            const comment = commentMap.get(commentId);
-                            if (comment && !allCategories[cat.category].comments.some(c => c.id === commentId)) {
-                                allCategories[cat.category].comments.push(comment);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (error) {
-            console.error(`Error processing batch ${batchNumber}:`, error);
-            if (error instanceof Error && (error.message.includes('API key not valid') || error.message.includes('400'))) {
-                 throw new Error(`Gemini API Error: Please check if your API key is correct and has billing enabled. Original error: ${error.message}`);
-            }
+const summarySchema = {
+    type: Type.OBJECT,
+    properties: {
+        summary: {
+            type: Type.STRING,
+            description: "A concise summary of the provided comments in 2-3 sentences."
         }
-    }
+    },
+    required: ["summary"],
+};
 
-    return Object.values(allCategories).filter(c => c.comments.length > 0);
+export const analyzeCommentBatch = async (
+  apiKey: string,
+  comments: Comment[]
+): Promise<Array<{ category: string; comment_ids: string[] }>> => {
+  // NOTE: In a browser extension context, API keys are managed by the user
+  // and passed from secure storage, rather than using process.env.
+  const ai = new GoogleGenAI({ apiKey });
+
+  const prompt = `Analyze and categorize the following YouTube comments. The ID of each comment is prefixed. Your response must be a valid JSON array matching the provided schema.
+
+Categories:
+${COMMENT_CATEGORIES.map(c => `- ${c.name}: ${c.description}`).join('\n')}
+
+Comments:
+${comments.map(c => `${c.id}:::${c.author}:::${c.text}`).join('\n\n')}
+`;
+
+  try {
+    // FIX: Use ai.models.generateContent
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: analysisSchema,
+      },
+    });
+
+    // FIX: Access text directly from response
+    const jsonString = response.text;
+    const result = JSON.parse(jsonString);
+    return result as Array<{ category: string; comment_ids: string[] }>;
+  } catch (error) {
+    console.error("Error analyzing comment batch:", error);
+    if (error instanceof Error && error.message.includes('API key not valid')) {
+       // FIX: Throw custom error with a specific 'cause' code for the store to handle.
+       throw new GeminiServiceError("Invalid Gemini API key.", 'GEMINI_API_KEY');
+    }
+    // FIX: Throw custom error for generic failures.
+    throw new GeminiServiceError("Failed to analyze comments with Gemini.", 'GEMINI_API_FAILURE');
+  }
+};
+
+export const summarizeCategory = async (
+  apiKey: string,
+  category: Category
+): Promise<string> => {
+  const ai = new GoogleGenAI({ apiKey });
+  const commentsText = category.comments.slice(0, 20).map(c => `- ${c.text}`).join('\n');
+
+  const prompt = `Summarize the following comments from the "${category.category}" category in 2-3 sentences. Focus on the main themes and sentiments expressed by the commenters.
+
+Comments:
+${commentsText}
+`;
+
+  try {
+    // FIX: Use ai.models.generateContent for summarization
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: summarySchema,
+      }
+    });
+    
+    // FIX: Access text directly from response
+    const jsonString = response.text;
+    const result = JSON.parse(jsonString);
+    return result.summary;
+
+  } catch (error) {
+    console.error(`Error summarizing category ${category.category}:`, error);
+    return "Could not generate a summary for this category.";
+  }
 };

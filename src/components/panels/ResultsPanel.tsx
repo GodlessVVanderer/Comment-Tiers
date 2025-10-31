@@ -1,33 +1,75 @@
-// FIX: Removed unnecessary chrome types reference as this component does not use the chrome API directly.
+// FIX: Remove reference to chrome types which are unavailable in this environment.
+// FIX: Add chrome declaration to satisfy TypeScript when types are not available.
+declare const chrome: any;
+
 import React, { useState } from 'react';
-// FIX: Use relative paths for imports
 import { useAppStore } from '../../store';
-import { AnalysisResults, Category } from '../../types';
 import CategoryAccordion from '../CategoryAccordion';
 import StatsCard from '../StatsCard';
 import ExportControls from '../ExportControls';
 import LiveConversation from '../LiveConversation';
 import DonationCTA from '../DonationCTA';
 import { formatNumber } from '../../utils';
-import { ClockIcon } from '../Icons';
 
 const ResultsPanel: React.FC = () => {
   const { results, actions } = useAppStore();
   const [activeTab, setActiveTab] = useState('comments');
+  const [openCategories, setOpenCategories] = useState<Set<string>>(new Set());
 
   if (!results) return null;
 
   const { stats, categories } = results;
 
+  const handleToggleCategory = (categoryName: string) => {
+    setOpenCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(categoryName)) {
+        newSet.delete(categoryName);
+      } else {
+        newSet.add(categoryName);
+      }
+      return newSet;
+    });
+  };
+
+  const handleExpandAll = () => {
+    setOpenCategories(new Set(categories.map(c => c.category)));
+  };
+
+  const handleCollapseAll = () => {
+    setOpenCategories(new Set());
+  };
+
   const renderTabContent = () => {
     switch(activeTab) {
       case 'comments':
         return (
-          <div className="space-y-2 mt-4">
-            {categories.map((category) => (
-              <CategoryAccordion key={category.category} categoryData={category} />
-            ))}
-          </div>
+          <>
+            <div className="flex justify-end gap-2 mb-2">
+                <button 
+                    onClick={handleExpandAll}
+                    className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-3 rounded-md"
+                >
+                    Expand All
+                </button>
+                <button 
+                    onClick={handleCollapseAll}
+                    className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-semibold py-1 px-3 rounded-md"
+                >
+                    Collapse All
+                </button>
+            </div>
+            <div className="space-y-2">
+              {categories.map((category) => (
+                <CategoryAccordion 
+                  key={category.category} 
+                  categoryData={category}
+                  isOpen={openCategories.has(category.category)}
+                  onToggle={() => handleToggleCategory(category.category)}
+                />
+              ))}
+            </div>
+          </>
         );
       case 'liveChat':
         return <LiveConversation />;
@@ -41,9 +83,6 @@ const ResultsPanel: React.FC = () => {
       <div className="flex justify-between items-start mb-4">
         <div>
           <h3 className="text-lg font-bold">Analysis Complete</h3>
-          <div className="flex items-center text-sm text-gray-400 mt-1 gap-4">
-              <span className="flex items-center"><ClockIcon className="mr-1.5"/>{`${stats.analyzedComments} comments analyzed`}</span>
-          </div>
         </div>
         <button
           onClick={actions.reset}
@@ -54,9 +93,9 @@ const ResultsPanel: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatsCard title="Total Comments Fetched" value={formatNumber(stats.totalComments)} />
-        <StatsCard title="Spam / Low-Effort Filtered" value={formatNumber(stats.filteredComments)} />
-        <StatsCard title="Comments Analyzed" value={formatNumber(stats.analyzedComments)} />
+        <StatsCard title="Total Comments Fetched" value={stats.totalComments} />
+        <StatsCard title="Spam / Filtered" value={stats.filteredComments} />
+        <StatsCard title="Comments Analyzed" value={stats.analyzedComments} />
       </div>
 
       <div className="border-b border-gray-700">

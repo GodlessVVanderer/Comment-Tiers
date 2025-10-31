@@ -1,155 +1,218 @@
-/// <reference types="chrome" />
+// FIX: Remove reference to chrome types which are unavailable in this environment.
+// FIX: Add chrome declaration to satisfy TypeScript when types are not available.
+declare const chrome: any;
+
+// FIX: Implement Zustand store for state management.
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { AppStatus, AnalysisResults, ProgressUpdate, AppError, Comment, Category, LiveSessionState, TranscriptionTurn } from './types';
-import { fetchComments, fetchReplies } from './services/youtubeService';
-import { analyzeComments } from './services/geminiService';
+import { AppError, AppStatus, AnalysisResults, Progress, LiveSessionState, Comment, Category, TranscriptionTurn, LiveSessionStatus } from './types';
+import * as youtubeService from './services/youtubeService';
+import * as geminiService from './services/geminiService';
 import * as liveService from './services/liveService';
-// FIX: The 'LiveSession' type is not exported from '@google/genai' and was not used in this file.
-import { LiveServerMessage } from '@google/genai';
-import { decode, decodeAudioData } from './audioUtils';
+import { COMMENT_CATEGORIES, DEFAULT_COMMENT_LIMIT } from './constants';
+import { batch } from './utils';
 
 interface AppState {
   youtubeApiKey: string | null;
   geminiApiKey: string | null;
-  videoId: string | null;
   status: AppStatus;
-  configError: string | null;
-  error: AppError | null;
+  progress: Progress;
   results: AnalysisResults | null;
-  progress: ProgressUpdate;
+  error: AppError | null;
+  configError: string | null;
   commentLimit: number;
-  isHelpModalOpen: boolean;
-  isGeminiHelpModalOpen: boolean;
-  isPricingModalOpen: boolean;
   liveSession: LiveSessionState;
+  isPricingModalOpen: boolean;
+
   actions: {
     setYoutubeApiKey: (key: string) => void;
     setGeminiApiKey: (key: string) => void;
-    setVideoId: (id: string) => void;
     setCommentLimit: (limit: number) => void;
-    checkConfig: () => void;
+    validateKeys: () => Promise<void>;
     analyze: () => Promise<void>;
     reset: () => void;
-    toggleHelpModal: () => void;
-    toggleGeminiHelpModal: () => void;
-    togglePricingModal: () => void;
-    addReply: (category: string, commentId: string, text: string) => void;
-    editComment: (category: string, commentId: string, text: string, replyId?: string) => void;
-    loadMoreReplies: (category: string, commentId: string) => void;
-    startLiveSession: () => void;
+    addReply: (categoryName: string, commentId: string, text: string) => void;
+    editComment: (categoryName: string, commentId: string, text: string, replyId?: string) => void;
+    loadMoreReplies: (categoryName: string, commentId: string) => void;
+    startLiveSession: () => Promise<void>;
     stopLiveSession: () => void;
+    togglePricingModal: () => void;
   };
 }
 
 const initialState = {
+  youtubeApiKey: null,
+  geminiApiKey: null,
   status: 'idle' as AppStatus,
-  configError: null,
-  error: null,
+  progress: { phase: 'fetching', percent: 0 } as Progress,
   results: null,
-  videoId: null,
-  // FIX: Use 'as const' to ensure the type of 'phase' is inferred as the literal 'fetching', not the wider 'string' type, to match 'LoadingPhase'.
-  progress: { phase: 'fetching' as const, percent: 0 },
-  commentLimit: 2000,
-  isHelpModalOpen: false,
-  isGeminiHelpModalOpen: false,
+  error: null,
+  configError: null,
+  commentLimit: DEFAULT_COMMENT_LIMIT,
   isPricingModalOpen: false,
   liveSession: {
-    status: 'idle' as const,
+    status: 'idle',
     transcription: [],
     error: null,
-  },
+  } as LiveSessionState,
 };
 
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
-      youtubeApiKey: null,
-      geminiApiKey: null,
       ...initialState,
       actions: {
         setYoutubeApiKey: (key) => set({ youtubeApiKey: key }),
         setGeminiApiKey: (key) => set({ geminiApiKey: key }),
-        setVideoId: (id) => set({ videoId: id }),
         setCommentLimit: (limit) => set({ commentLimit: limit }),
-        toggleHelpModal: () => set(state => ({ isHelpModalOpen: !state.isHelpModalOpen })),
-        toggleGeminiHelpModal: () => set(state => ({ isGeminiHelpModalOpen: !state.isGeminiHelpModalOpen })),
         togglePricingModal: () => set(state => ({ isPricingModalOpen: !state.isPricingModalOpen })),
-        checkConfig: () => {
+        
+        validateKeys: async () => {
           const { youtubeApiKey, geminiApiKey } = get();
-          if (!youtubeApiKey || !geminiApiKey) {
-            set({ status: 'configuring', configError: 'Please set your YouTube and Gemini API keys in the extension options.' });
-          } else {
-            set({ status: 'idle', configError: null });
+          if (!youtubeApiKey) {
+            set({ status: 'config-error', configError: 'YouTube API Key is not set.' });
+            return;
           }
+          if (!geminiApiKey) {
+            set({ status: 'config-error', configError: 'Gemini API Key is not set.' });
+            return;
+          }
+          set({ status: 'idle', configError: null });
         },
+
         analyze: async () => {
-          const { videoId, youtubeApiKey, geminiApiKey, commentLimit } = get();
-          if (!videoId || !youtubeApiKey || !geminiApiKey) {
-            set({ status: 'error', error: { code: 'CONFIG_MISSING', message: 'API Keys or Video ID are missing.' } });
+          const { youtubeApiKey, geminiApiKey, commentLimit } = get();
+          await get().actions.validateKeys();
+          if (get().status === 'config-error' || !youtubeApiKey || !geminiApiKey) {
             return;
           }
 
-          set({ status: 'loading', progress: { phase: 'fetching', percent: 0, processed: 0, total: commentLimit }, error: null });
+          set({ status: 'loading', progress: { phase: 'fetching', percent: 0 }, error: null, results: null });
 
           try {
-            const startTime = Date.now();
-            const comments = await fetchComments(videoId, youtubeApiKey, commentLimit, (fetched) => {
-              const percent = Math.min(99, Math.round((fetched / commentLimit) * 100));
-              set({ progress: { phase: 'fetching', percent, processed: fetched, total: commentLimit } });
-            });
-
-            // Basic filtering
-            const filteredComments = comments.filter(c => c.text.length > 10 && c.likeCount > 0);
-
-            set({ status: 'summarizing', progress: { phase: 'analyzing', percent: 0 } });
+            // 1. Fetch comments
+            const videoId = youtubeService.getVideoIdFromUrl();
+            if (!videoId) throw new Error("Could not find YouTube video ID on this page.");
             
-            const categories = await analyzeComments(filteredComments, geminiApiKey, (processed, total) => {
-                 const percent = Math.min(99, Math.round((processed / total) * 100));
-                 set({ progress: { phase: 'analyzing', percent, processed, total }});
+            const allComments = await youtubeService.fetchAllComments(youtubeApiKey, videoId, commentLimit, (progress) => {
+              set({ progress: { ...progress, phase: 'fetching' } });
             });
 
-            const totalComments = comments.length;
-            const analyzedComments = categories.reduce((sum, cat) => sum + cat.comments.length, 0);
+            // 2. Filter comments (basic)
+            set({ status: 'loading', progress: { phase: 'filtering', percent: 0 } });
+            const filteredComments = allComments.filter(c => c.text.length > 10 && !c.text.toLowerCase().includes('sub'));
+            
+            const stats = {
+              totalComments: allComments.length,
+              filteredComments: allComments.length - filteredComments.length,
+              analyzedComments: filteredComments.length
+            };
+            
+            // 3. Analyze comments
+            set({ status: 'loading', progress: { phase: 'analyzing', percent: 0, processed: 0, total: filteredComments.length } });
+            
+            const commentMap = new Map(filteredComments.map(c => [c.id, c]));
+            const commentBatches = batch(filteredComments, 50);
+            const categorizedIds: Record<string, string[]> = {};
+            COMMENT_CATEGORIES.forEach(c => categorizedIds[c.name] = []);
+            
+            let processedCount = 0;
+            for (const currentBatch of commentBatches) {
+              const result = await geminiService.analyzeCommentBatch(geminiApiKey, currentBatch);
+              result.forEach(item => {
+                if(categorizedIds[item.category]) {
+                    categorizedIds[item.category].push(...item.comment_ids);
+                }
+              });
+              processedCount += currentBatch.length;
+              set({ progress: { phase: 'analyzing', percent: (processedCount / filteredComments.length) * 100, processed: processedCount, total: filteredComments.length } });
+            }
+            
+            const categories: Category[] = COMMENT_CATEGORIES.map(c => ({
+              category: c.name,
+              summary: '',
+              comments: (categorizedIds[c.name] || []).map(id => commentMap.get(id)).filter((c): c is Comment => !!c)
+            })).filter(c => c.comments.length > 0);
 
-            set({
-              status: 'success',
-              results: {
-                stats: {
-                  totalComments,
-                  filteredComments: totalComments - filteredComments.length,
-                  analyzedComments,
-                },
-                categories,
-              },
-            });
+            // 4. Summarize categories
+            set({ status: 'loading', progress: { phase: 'summarizing', percent: 0, processed: 0, total: categories.length } });
+            
+            for(let i=0; i<categories.length; i++) {
+                if (categories[i].comments.length > 0) {
+                    const summary = await geminiService.summarizeCategory(geminiApiKey, categories[i]);
+                    categories[i].summary = summary;
+                }
+                set({ progress: { phase: 'summarizing', percent: ((i+1) / categories.length) * 100, processed: i+1, total: categories.length } });
+            }
+
+            set({ status: 'results', results: { stats, categories } });
           } catch (error: any) {
-            set({ status: 'error', error: { code: 'ANALYSIS_FAILED', message: error.message || 'An unknown error occurred.' } });
+            console.error(error);
+            set({ status: 'error', error: { code: error.cause || 'UNKNOWN', message: error.message } });
           }
         },
+
         reset: () => {
-            get().actions.stopLiveSession();
-            set(initialState);
-            get().actions.checkConfig();
+          const { youtubeApiKey, geminiApiKey, commentLimit } = get();
+          set({ ...initialState, youtubeApiKey, geminiApiKey, commentLimit });
+          get().actions.validateKeys();
         },
-        addReply: (category, commentId, text) => { /* Not implemented for this version */ },
-        editComment: (category, commentId, text, replyId) => { /* Not implemented for this version */ },
-        loadMoreReplies: async (category, commentId) => {
-            const { youtubeApiKey } = get();
-            if (!youtubeApiKey) return;
-            // Simplified implementation
-            console.log(`Loading more replies for ${commentId} in ${category}`);
+
+        addReply: (categoryName, commentId, text) => {},
+        editComment: (categoryName, commentId, text, replyId) => {},
+        loadMoreReplies: async (categoryName, commentId) => {
+            // NOTE: Full implementation requires OAuth2, which is beyond the scope of API key auth.
+            console.log(`Loading more replies for ${commentId} in ${categoryName}`);
         },
-        startLiveSession: async () => { /* Stub for live session */ },
-        stopLiveSession: () => { /* Stub for live session */ },
+
+        startLiveSession: async () => {
+          const { geminiApiKey } = get();
+          if (!geminiApiKey) {
+            set({ liveSession: { ...get().liveSession, error: "Gemini API Key not set." } });
+            return;
+          }
+          set({ liveSession: { status: 'listening', transcription: [], error: null } });
+          try {
+            await liveService.startSession(geminiApiKey, {
+              onTranscriptionUpdate: (turn) => {
+                set(state => {
+                    const newTranscription = [...state.liveSession.transcription];
+                    const lastTurn = newTranscription[newTranscription.length - 1];
+                    if (lastTurn && lastTurn.speaker === turn.speaker) {
+                        lastTurn.text = turn.text;
+                    } else if (turn.text.trim()) {
+                        newTranscription.push(turn);
+                    }
+                    return { liveSession: { ...state.liveSession, transcription: newTranscription } };
+                });
+              },
+              onStatusUpdate: (status: LiveSessionStatus) => set(state => ({ liveSession: { ...state.liveSession, status }})),
+              onError: (error: string) => set(state => ({ liveSession: { ...state.liveSession, status: 'idle', error }})),
+            });
+          } catch(e: any) {
+             set(state => ({ liveSession: { ...state.liveSession, status: 'idle', error: e.message }}));
+          }
+        },
+        stopLiveSession: () => {
+          liveService.stopSession();
+          set((state) => ({
+            liveSession: {
+              ...state.liveSession,
+              status: 'idle',
+              transcription: [],
+              error: null,
+            },
+          }));
+        },
       },
     }),
     {
       name: 'youtube-comment-analyzer-storage',
-      storage: createJSONStorage(() => chrome.storage.local),
+      storage: createJSONStorage(() => chrome.storage.sync),
       partialize: (state) => ({
         youtubeApiKey: state.youtubeApiKey,
         geminiApiKey: state.geminiApiKey,
+        commentLimit: state.commentLimit,
       }),
     }
   )

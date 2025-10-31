@@ -1,30 +1,32 @@
 import React from 'react';
-// FIX: Use relative paths for imports
 import { useAppStore } from '../../store';
-import { formatEta } from '../../utils';
 import { LoadingSpinner } from '../Icons';
+import { formatEta } from '../../utils';
+
+const phaseTextMap = {
+  fetching: 'Fetching comments from YouTube...',
+  filtering: 'Filtering out spam and low-effort comments...',
+  analyzing: 'Analyzing comments with Gemini AI...',
+  summarizing: 'Generating summaries...',
+};
 
 const LoadingPanel = () => {
   const { progress } = useAppStore();
-
-  const phaseText: Record<string, string> = {
-      fetching: `Fetching comments... (${progress.processed}/${progress.total})`,
-      filtering: 'Filtering comments...',
-      analyzing: `Analyzing Batch ${progress.processed} of ${progress.total}...`,
-      summarizing: 'Generating summaries...',
-  };
+  const { phase, percent, processed, total, etaSeconds } = progress;
 
   return (
-    <div className="flex flex-col items-center justify-center p-8">
-      <LoadingSpinner className="w-12 h-12 mb-4" />
-      <p className="text-lg mb-2">{phaseText[progress.phase] || 'Processing...'}</p>
-      <div className="w-full bg-gray-700 rounded-full h-2.5">
-        <div 
-          className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
-          style={{ width: `${progress.percent}%` }}
-        ></div>
+    <div className="p-8 flex flex-col items-center justify-center">
+      <LoadingSpinner />
+      <p className="mt-4 text-lg">{phaseTextMap[phase]}</p>
+      <div className="w-full bg-gray-600 rounded-full h-2.5 mt-4">
+        <div className="bg-blue-500 h-2.5 rounded-full" style={{ width: `${percent}%` }}></div>
       </div>
-      <p className="text-sm text-gray-400 mt-2">{formatEta(progress.etaSeconds)}</p>
+      <div className="mt-2 text-sm text-gray-400 flex justify-between w-full">
+        <span>
+            {processed !== undefined && total !== undefined ? `${processed.toLocaleString()} / ${total.toLocaleString()}`: `${percent}%`}
+        </span>
+        <span>{formatEta(etaSeconds)}</span>
+      </div>
     </div>
   );
 };

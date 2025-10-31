@@ -1,5 +1,5 @@
 import React from 'react';
-// FIX: Use relative paths for imports
+// FIX: Use relative path for import
 import { formatNumber } from '../utils';
 
 interface StatsCardProps {

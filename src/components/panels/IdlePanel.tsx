@@ -1,36 +1,39 @@
 import React from 'react';
-// FIX: Use relative paths for imports
 import { useAppStore } from '../../store';
-import { COMMENT_LIMIT_OPTIONS, DEFAULT_COMMENT_LIMIT } from '../../constants';
+import { COMMENT_LIMIT_OPTIONS } from '../../constants';
 
 const IdlePanel = () => {
-  const { actions } = useAppStore();
-
-  const handleStartAnalysis = (limit: number) => {
-    actions.setCommentLimit(limit);
-    actions.analyze();
-  };
+  const { actions, commentLimit } = useAppStore();
 
   return (
     <div className="text-center p-8">
-      <p className="mb-4 text-lg">Select the number of comments to analyze and begin.</p>
-      <div className="flex flex-wrap justify-center gap-3">
-        {COMMENT_LIMIT_OPTIONS.map(limit => (
-           <button
-             key={limit}
-             onClick={() => handleStartAnalysis(limit)}
-             className={`font-bold py-2 px-5 rounded-md transition-colors duration-200 ${
-                limit === DEFAULT_COMMENT_LIMIT 
-                ? 'bg-green-600 hover:bg-green-700 text-white'
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
-             }`}
-           >
-             Analyze {limit / 1000}k
-           </button>
-        ))}
+      <div className="mb-6">
+        <label htmlFor="comment-limit" className="block text-sm font-medium text-gray-400 mb-2">
+          Number of comments to analyze:
+        </label>
+        <select
+          id="comment-limit"
+          value={commentLimit}
+          onChange={(e) => actions.setCommentLimit(Number(e.target.value))}
+          className="bg-gray-700 border border-gray-600 rounded-md p-2 text-sm"
+        >
+          {COMMENT_LIMIT_OPTIONS.map(limit => (
+            <option key={limit} value={limit}>
+              {limit.toLocaleString()}
+            </option>
+          ))}
+        </select>
       </div>
-       <div className="mt-6 flex justify-center items-center gap-2">
+      <button
+        onClick={() => actions.analyze()}
+        className='bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-md transition-colors duration-200 text-lg'
+      >
+        Analyze Comments
+      </button>
+       <div className="mt-6 flex justify-center items-center gap-4">
           <button onClick={() => useAppStore.getState().actions.togglePricingModal()} className="text-xs text-gray-400 hover:underline">API Usage Info</button>
+          <span className="text-gray-600">|</span>
+           <a href="https://github.com/google/aistudio-web" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:underline">View on GitHub</a>
       </div>
     </div>
   );

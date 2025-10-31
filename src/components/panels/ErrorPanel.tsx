@@ -1,6 +1,8 @@
-/// <reference types="chrome" />
+// FIX: Remove reference to chrome types which are unavailable in this environment.
+// FIX: Add chrome declaration to satisfy TypeScript when types are not available.
+declare const chrome: any;
+
 import React from 'react';
-// FIX: Use relative paths for imports
 import { useAppStore } from '../../store';
 
 const ErrorPanel = () => {

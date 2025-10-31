@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 // FIX: Use relative paths for imports
 import { useAppStore } from '../store';
-import { Category, Comment } from '../types';
+import { Category } from '../types';
 import { ChevronDownIcon, ChevronUpIcon, MagnifyingGlassIcon, PlusCircleIcon } from './Icons';
 import CommentCard from './CommentCard';
 
 interface CategoryAccordionProps {
   categoryData: Category;
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
-const CategoryAccordion: React.FC<CategoryAccordionProps> = ({ categoryData }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const CategoryAccordion: React.FC<CategoryAccordionProps> = ({ categoryData, isOpen, onToggle }) => {
   const [filter, setFilter] = useState('');
   const [visibleCount, setVisibleCount] = useState(10);
   const { actions } = useAppStore();
@@ -40,7 +41,7 @@ const CategoryAccordion: React.FC<CategoryAccordionProps> = ({ categoryData }) =
   return (
     <div className="bg-gray-700 rounded-lg">
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={onToggle}
         className="w-full flex justify-between items-center p-4 text-left"
       >
         <div className="flex items-center">

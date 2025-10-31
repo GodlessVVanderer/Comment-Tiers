@@ -1,5 +1,5 @@
 import React from 'react';
-// FIX: Use relative paths for imports
+// FIX: Use relative path for import
 import { Category } from '../types';
 import { ArrowDownTrayIcon } from './Icons';
 
@@ -25,7 +25,7 @@ const ExportControls: React.FC<ExportControlsProps> = ({ categories }) => {
         category.comments.forEach(comment => {
             const row = [
                 `"${category.category}"`,
-                `"${category.summary.replace(/"/g, '""')}"`,
+                `"${(category.summary || '').replace(/"/g, '""')}"`,
                 `"${comment.author.replace(/"/g, '""')}"`,
                 `"${comment.text.replace(/"/g, '""')}"`,
                 comment.likeCount,

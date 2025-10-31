@@ -1,23 +1,24 @@
+// FIX: Define all necessary types for the application
+
 export interface Comment {
   id: string;
-  author: string;
   text: string;
-  likeCount: number;
-  publishedAt: string;
+  author: string;
   authorProfileImageUrl: string;
+  publishedAt: string;
+  likeCount: number;
   replies: Comment[];
   totalReplyCount: number;
-  isRepliesLoading?: boolean;
-  nextReplyPageToken?: string | null;
   isEditable?: boolean;
-  timestamp?: number;
+  isRepliesLoading?: boolean;
+  nextPageToken?: string;
 }
 
-export type Category<T = Comment> = {
+export interface Category {
   category: string;
   summary: string;
-  comments: T[];
-};
+  comments: Comment[];
+}
 
 export interface AnalysisStats {
   totalComments: number;
@@ -30,16 +31,15 @@ export interface AnalysisResults {
   categories: Category[];
 }
 
-export type AppStatus = 'idle' | 'loading' | 'summarizing' | 'error' | 'success' | 'configuring';
+export type AppStatus = 'idle' | 'loading' | 'results' | 'error' | 'config-error';
+export type ProgressPhase = 'fetching' | 'filtering' | 'analyzing' | 'summarizing';
 
-export type LoadingPhase = 'fetching' | 'filtering' | 'analyzing' | 'summarizing';
-
-export interface ProgressUpdate {
-  phase: LoadingPhase;
+export interface Progress {
+  phase: ProgressPhase;
   percent: number;
-  etaSeconds?: number;
   processed?: number;
   total?: number;
+  etaSeconds?: number;
 }
 
 export interface AppError {
@@ -47,13 +47,11 @@ export interface AppError {
   message: string;
 }
 
+export type LiveSessionStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 export interface TranscriptionTurn {
   speaker: 'user' | 'model';
   text: string;
 }
-
-export type LiveSessionStatus = 'idle' | 'listening' | 'processing' | 'speaking';
-
 export interface LiveSessionState {
   status: LiveSessionStatus;
   transcription: TranscriptionTurn[];

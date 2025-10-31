@@ -1,83 +1,53 @@
+// FIX: Implement content script to inject the app into YouTube pages.
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './style.css';
-// @ts-ignore
-import styles from './style.css?inline';
 
 const APP_ROOT_ID = 'youtube-comment-analyzer-root';
+let currentVideoId: string | null = null;
 
-let root: ReactDOM.Root | null = null;
-let appContainer: HTMLElement | null = null;
-
-const mountApp = (target: Element) => {
-  if (appContainer) {
-    unmountApp();
-  }
-
-  appContainer = document.createElement('div');
-  appContainer.id = APP_ROOT_ID;
-  target.parentElement?.insertBefore(appContainer, target);
-
-  const shadowRoot = appContainer.attachShadow({ mode: 'open' });
-  const appRootDiv = document.createElement('div');
-  shadowRoot.appendChild(appRootDiv);
-
-  const styleSheet = document.createElement('style');
-  styleSheet.textContent = styles;
-  shadowRoot.appendChild(styleSheet);
-
-  const videoId = new URLSearchParams(window.location.search).get('v');
-  if (videoId) {
-    root = ReactDOM.createRoot(appRootDiv);
-    root.render(
-      <React.StrictMode>
-        <App videoId={videoId} />
-      </React.StrictMode>
-    );
-  }
-};
-
-const unmountApp = () => {
-  if (root) {
-    root.unmount();
-    root = null;
-  }
-  if (appContainer) {
-    appContainer.remove();
-    appContainer = null;
-  }
-};
-
-const observer = new MutationObserver(() => {
-  const commentsHeader = document.querySelector('ytd-comments-header-renderer');
-  const existingApp = document.getElementById(APP_ROOT_ID);
+const injectApp = () => {
+    const playerContainer = document.querySelector('#player-container.ytd-watch-flexy');
+    const existingRoot = document.getElementById(APP_ROOT_ID);
   
-  if (commentsHeader && !existingApp) {
-    mountApp(commentsHeader);
-  }
-});
-
-const startObserver = () => {
-  observer.observe(document.body, { childList: true, subtree: true });
-};
-
-// Handle YouTube's SPA navigation
-document.addEventListener('yt-navigate-finish', () => {
-    unmountApp();
-    // A small delay to allow YouTube's new page to render
-    setTimeout(() => {
-        const commentsHeader = document.querySelector('ytd-comments-header-renderer');
-        if(commentsHeader){
-            mountApp(commentsHeader);
-        }
-    }, 500);
-});
-
-
-startObserver();
-// Initial check in case the page is already loaded
-const initialCommentsHeader = document.querySelector('ytd-comments-header-renderer');
-if (initialCommentsHeader) {
-    mountApp(initialCommentsHeader);
+    if (playerContainer && !existingRoot) {
+      const appRoot = document.createElement('div');
+      appRoot.id = APP_ROOT_ID;
+      playerContainer.parentNode?.insertBefore(appRoot, playerContainer.nextSibling);
+  
+      const root = ReactDOM.createRoot(appRoot);
+      root.render(
+        <React.StrictMode>
+          <App />
+        </React.StrictMode>
+      );
+    }
 }
+
+// Initial injection
+setTimeout(injectApp, 1000);
+
+
+// Observe for SPA navigation
+const observer = new MutationObserver(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const videoId = urlParams.get('v');
+
+    if (videoId !== currentVideoId) {
+        currentVideoId = videoId;
+        const existingRoot = document.getElementById(APP_ROOT_ID);
+        if(existingRoot) {
+            existingRoot.remove();
+        }
+        if(videoId) {
+            // Wait for the page to likely have the player container
+            setTimeout(injectApp, 1000);
+        }
+    }
+});
+
+observer.observe(document.body, {
+  childList: true,
+  subtree: true,
+});
