@@ -1,5 +1,4 @@
 // FIX: Implement Live service for real-time conversation.
-// FIX: `LiveSession` is not an exported member of `@google/genai`. Use `any` for the session object type.
 import { GoogleGenAI, LiveServerMessage, Modality, Blob } from '@google/genai';
 import { encode, decode, decodeAudioData } from '../audioUtils';
 import { LiveSessionStatus, TranscriptionTurn } from '../types';
@@ -71,14 +70,12 @@ export const startSession = async (apiKey: string, callbacks: LiveCallbacks): Pr
                 onmessage: async (message: LiveServerMessage) => {
                     if (message.serverContent?.inputTranscription) {
                         const text = message.serverContent.inputTranscription.text;
-                        // FIX: Append streaming transcription text instead of overwriting.
                         currentInputTranscription += text;
                         callbacks.onTranscriptionUpdate({ speaker: 'user', text: currentInputTranscription });
                         callbacks.onStatusUpdate('processing');
                     }
                     if (message.serverContent?.outputTranscription) {
                         const text = message.serverContent.outputTranscription.text;
-                        // FIX: Append streaming transcription text instead of overwriting.
                         currentOutputTranscription += text;
                         callbacks.onTranscriptionUpdate({ speaker: 'model', text: currentOutputTranscription });
                     }

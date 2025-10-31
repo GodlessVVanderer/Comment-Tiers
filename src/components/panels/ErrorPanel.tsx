@@ -22,7 +22,7 @@ const ErrorPanel = () => {
       <p className="text-red-400 my-2">{error?.message || 'An unknown error occurred.'}</p>
       <div className="flex justify-center gap-4 mt-4">
         <button
-          onClick={actions.analyze}
+          onClick={() => actions.analyze()}
           className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md"
         >
           Retry

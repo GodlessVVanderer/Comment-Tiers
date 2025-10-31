@@ -31,7 +31,7 @@ export interface AnalysisResults {
   categories: Category[];
 }
 
-export type AppStatus = 'idle' | 'loading' | 'results' | 'error' | 'config-error';
+export type AppStatus = 'idle' | 'loading' | 'results' | 'error' | 'config-error' | 'configuring';
 export type ProgressPhase = 'fetching' | 'filtering' | 'analyzing' | 'summarizing';
 
 export interface Progress {
@@ -47,7 +47,7 @@ export interface AppError {
   message: string;
 }
 
-export type LiveSessionStatus = 'idle' | 'listening' | 'processing' | 'speaking';
+export type LiveSessionStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'loading';
 export interface TranscriptionTurn {
   speaker: 'user' | 'model';
   text: string;

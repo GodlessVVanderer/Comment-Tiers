@@ -73,17 +73,25 @@ ${comments.map(c => `${c.id}:::${c.author}:::${c.text}`).join('\n\n')}
       },
     });
 
-    // FIX: Access text directly from response
+    // FIX: Access text directly from response and handle potential undefined value
     const jsonString = response.text;
+    if (typeof jsonString !== 'string') {
+      throw new GeminiServiceError("Received empty or invalid response from Gemini.", 'GEMINI_API_FAILURE');
+    }
     const result = JSON.parse(jsonString);
     return result as Array<{ category: string; comment_ids: string[] }>;
   } catch (error) {
     console.error("Error analyzing comment batch:", error);
+
+    if (error instanceof SyntaxError) {
+        throw new GeminiServiceError("Failed to parse response from Gemini.", 'GEMINI_API_FAILURE');
+    }
     if (error instanceof Error && error.message.includes('API key not valid')) {
-       // FIX: Throw custom error with a specific 'cause' code for the store to handle.
        throw new GeminiServiceError("Invalid Gemini API key.", 'GEMINI_API_KEY');
     }
-    // FIX: Throw custom error for generic failures.
+    if (error instanceof GeminiServiceError) {
+        throw error;
+    }
     throw new GeminiServiceError("Failed to analyze comments with Gemini.", 'GEMINI_API_FAILURE');
   }
 };
@@ -112,13 +120,26 @@ ${commentsText}
       }
     });
     
-    // FIX: Access text directly from response
+    // FIX: Access text directly from response and handle potential undefined value
     const jsonString = response.text;
-    const result = JSON.parse(jsonString);
+    if (typeof jsonString !== 'string') {
+        throw new GeminiServiceError(`Received empty summary response for category "${category.category}".`, 'GEMINI_API_FAILURE');
+    }
+    const result: { summary: string } = JSON.parse(jsonString);
     return result.summary;
 
   } catch (error) {
     console.error(`Error summarizing category ${category.category}:`, error);
-    return "Could not generate a summary for this category.";
+    
+    if (error instanceof SyntaxError) {
+        throw new GeminiServiceError(`Failed to parse summary for category "${category.category}".`, 'GEMINI_API_FAILURE');
+    }
+    if (error instanceof Error && error.message.includes('API key not valid')) {
+       throw new GeminiServiceError("Invalid Gemini API key.", 'GEMINI_API_KEY');
+    }
+    if (error instanceof GeminiServiceError) {
+        throw error;
+    }
+    throw new GeminiServiceError(`Failed to summarize category "${category.category}".`, 'GEMINI_API_FAILURE');
   }
 };

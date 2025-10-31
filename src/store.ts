@@ -4,7 +4,7 @@ declare const chrome: any;
 
 // FIX: Implement Zustand store for state management.
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
 import { AppError, AppStatus, AnalysisResults, Progress, LiveSessionState, Comment, Category, TranscriptionTurn, LiveSessionStatus } from './types';
 import * as youtubeService from './services/youtubeService';
 import * as geminiService from './services/geminiService';
@@ -43,7 +43,7 @@ interface AppState {
 const initialState = {
   youtubeApiKey: null,
   geminiApiKey: null,
-  status: 'idle' as AppStatus,
+  status: 'configuring' as AppStatus,
   progress: { phase: 'fetching', percent: 0 } as Progress,
   results: null,
   error: null,
@@ -57,6 +57,32 @@ const initialState = {
   } as LiveSessionState,
 };
 
+// Wrapper for chrome.storage.sync to conform to Zustand's StateStorage interface
+const chromeStorageSync: StateStorage = {
+    getItem: (name: string): Promise<string | null> => {
+        return new Promise((resolve) => {
+            chrome.storage.sync.get([name], (result: { [key: string]: any; }) => {
+                resolve(result[name] ?? null);
+            });
+        });
+    },
+    setItem: (name: string, value: string): Promise<void> => {
+        return new Promise((resolve) => {
+            chrome.storage.sync.set({ [name]: value }, () => {
+                resolve();
+            });
+        });
+    },
+    removeItem: (name: string): Promise<void> => {
+        return new Promise((resolve) => {
+            chrome.storage.sync.remove(name, () => {
+                resolve();
+            });
+        });
+    },
+};
+
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -69,12 +95,8 @@ export const useAppStore = create<AppState>()(
         
         validateKeys: async () => {
           const { youtubeApiKey, geminiApiKey } = get();
-          if (!youtubeApiKey) {
-            set({ status: 'config-error', configError: 'YouTube API Key is not set.' });
-            return;
-          }
-          if (!geminiApiKey) {
-            set({ status: 'config-error', configError: 'Gemini API Key is not set.' });
+          if (!youtubeApiKey || !geminiApiKey) {
+            set({ status: 'config-error', configError: 'Both YouTube and Gemini API keys are required.' });
             return;
           }
           set({ status: 'idle', configError: null });
@@ -94,7 +116,7 @@ export const useAppStore = create<AppState>()(
             const videoId = youtubeService.getVideoIdFromUrl();
             if (!videoId) throw new Error("Could not find YouTube video ID on this page.");
             
-            const allComments = await youtubeService.fetchAllComments(youtubeApiKey, videoId, commentLimit, (progress) => {
+            const allComments = await youtubeService.fetchAllComments(youtubeApiKey, videoId, commentLimit, (progress: { percent: number, processed: number, total: number }) => {
               set({ progress: { ...progress, phase: 'fetching' } });
             });
 
@@ -154,7 +176,7 @@ export const useAppStore = create<AppState>()(
 
         reset: () => {
           const { youtubeApiKey, geminiApiKey, commentLimit } = get();
-          set({ ...initialState, youtubeApiKey, geminiApiKey, commentLimit });
+          set({ ...initialState, status: 'idle', youtubeApiKey, geminiApiKey, commentLimit });
           get().actions.validateKeys();
         },
 
@@ -171,7 +193,7 @@ export const useAppStore = create<AppState>()(
             set({ liveSession: { ...get().liveSession, error: "Gemini API Key not set." } });
             return;
           }
-          set({ liveSession: { status: 'listening', transcription: [], error: null } });
+          set(state => ({ liveSession: { ...state.liveSession, status: 'loading', error: null, transcription: [] } }));
           try {
             await liveService.startSession(geminiApiKey, {
               onTranscriptionUpdate: (turn) => {
@@ -208,7 +230,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'youtube-comment-analyzer-storage',
-      storage: createJSONStorage(() => chrome.storage.sync),
+      storage: createJSONStorage(() => chromeStorageSync),
       partialize: (state) => ({
         youtubeApiKey: state.youtubeApiKey,
         geminiApiKey: state.geminiApiKey,
