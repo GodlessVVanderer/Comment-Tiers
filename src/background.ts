@@ -1,7 +1,7 @@
-// FIX: Add chrome type declaration to avoid TypeScript errors in a web extension context.
+// Add chrome type declaration to avoid TypeScript errors in a web extension context.
 declare const chrome: any;
-import { MIN_COMMENT_LENGTH, NGRAM_SPAM_THRESHOLD } from './constants';
-import { Comment } from './types';
+import { MIN_COMMENT_LENGTH, NGRAM_SPAM_THRESHOLD } from '@/constants';
+import { Comment } from '@/types';
 
 // Function to calculate n-grams and check for repetition
 const isSpam = (text: string): boolean => {

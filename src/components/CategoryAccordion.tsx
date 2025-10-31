@@ -1,8 +1,7 @@
 import React, { useState, useMemo } from 'react';
-// FIX: Use relative path for local module
-import { Category, Comment } from '../types';
-import { CommentCard } from './CommentCard';
-import { ChevronUpIcon, ChevronDownIcon, PlusCircleIcon, MagnifyingGlassIcon } from './Icons';
+import { Category, Comment } from '@/types';
+import { CommentCard } from '@/components/CommentCard';
+import { ChevronUpIcon, ChevronDownIcon, PlusCircleIcon, MagnifyingGlassIcon } from '@/components/Icons';
 
 interface CategoryAccordionProps {
   category: Category;

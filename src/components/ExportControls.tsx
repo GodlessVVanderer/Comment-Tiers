@@ -1,8 +1,7 @@
 import React from 'react';
-// FIX: Use relative paths for local modules
-import { useStore } from '../store';
-import { Comment } from '../types';
-import { ArrowDownTrayIcon } from './Icons';
+import { useStore } from '@/store';
+import { Comment } from '@/types';
+import { ArrowDownTrayIcon } from '@/components/Icons';
 
 export const ExportControls = () => {
   const analysisResult = useStore(state => state.analysisResult);

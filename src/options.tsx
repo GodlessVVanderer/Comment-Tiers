@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom/client';
-import { useStore } from './store';
+import { useStore } from '@/store';
 import './style.css';
 
 const Options = () => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { XIcon } from './Icons';
+import { XIcon } from '@/components/Icons';
 
 interface GeminiApiKeyHelpModalProps {
   isOpen: boolean;

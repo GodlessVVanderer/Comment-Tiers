@@ -1,5 +1,5 @@
 import { Blob, GoogleGenAI, LiveServerMessage, Modality } from '@google/genai';
-import { encode } from '../audioUtils';
+import { encode } from '@/audioUtils';
 
 let sessionPromise: Promise<any> | null = null;
 const aiStore: { ai: GoogleGenAI | null } = { ai: null };

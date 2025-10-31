@@ -1,6 +1,6 @@
 import React from 'react';
-import { useStore } from '../store';
-import { MicIcon, MicOffIcon, LoaderIcon } from './Icons';
+import { useStore } from '@/store';
+import { MicIcon, MicOffIcon, LoaderIcon } from '@/components/Icons';
 
 export const LiveConversation: React.FC = () => {
     const { isListening, isConnecting, liveError, transcriptions, startListening, stopListening } = useStore();

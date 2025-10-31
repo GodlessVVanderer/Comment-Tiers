@@ -1,5 +1,5 @@
 import React from 'react';
-import { HeartIcon, CoffeeIcon } from './Icons';
+import { HeartIcon, CoffeeIcon } from '@/components/Icons';
 
 export const DonationCTA = () => {
   return (

@@ -9,12 +9,12 @@ import {
   TranscriptionEntry,
   View,
   AppError,
-} from './types';
-import { fetchComments } from './services/youtubeService';
-import { analyzeComments } from './services/geminiService';
-import { startLiveConversation, stopLiveConversation, sendAudio } from './services/liveService';
+} from '@/types';
+import { fetchComments } from '@/services/youtubeService';
+import { analyzeComments } from '@/services/geminiService';
+import { startLiveConversation, stopLiveConversation, sendAudio } from '@/services/liveService';
 import { LiveServerMessage } from '@google/genai';
-import { decode, decodeAudioData } from './audioUtils';
+import { decode, decodeAudioData } from '@/audioUtils';
 
 // For background script communication
 declare const chrome: any;
@@ -411,14 +411,12 @@ export const useStore = create<AppState>()(
             });
           }),
         setItem: (name, value) =>
-          // FIX: Add explicit <void> type argument to Promise.
           new Promise<void>((resolve) => {
             chrome.storage.local.set({ [name]: JSON.parse(value) }, () => {
               resolve();
             });
           }),
         removeItem: (name) =>
-          // FIX: Add explicit <void> type argument to Promise.
           new Promise<void>((resolve) => {
             chrome.storage.local.remove([name], () => {
               resolve();

@@ -1,7 +1,6 @@
 import { GoogleGenAI, Type, HarmCategory, HarmBlockThreshold } from '@google/genai';
-// FIX: Use relative paths for local modules
-import { AnalysisResult, Category, Comment, ProgressUpdate } from '../types';
-import { CATEGORIES, CONCURRENCY_LIMIT, GEMINI_BATCH_SIZE } from '../constants';
+import { AnalysisResult, Category, Comment, ProgressUpdate } from '@/types';
+import { CATEGORIES, CONCURRENCY_LIMIT, GEMINI_BATCH_SIZE } from '@/constants';
 
 const responseSchema = {
   type: Type.ARRAY,
@@ -72,7 +71,6 @@ export const analyzeComments = async (
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
-        // FIX: safetySettings should be inside the config object.
         config: {
           systemInstruction,
           responseMimeType: 'application/json',

@@ -1,0 +1,1 @@
+full contents of services/geminiService.ts

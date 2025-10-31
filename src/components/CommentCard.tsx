@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-// FIX: Use relative path for local module
-import { Comment } from '../types';
-import { PencilIcon, CheckIcon, XMarkIcon } from './Icons';
+import { Comment } from '@/types';
+import { PencilIcon, CheckIcon, XMarkIcon } from '@/components/Icons';
 
 interface CommentCardProps {
   comment: Comment;

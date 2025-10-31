@@ -1,10 +1,10 @@
 import React, { useEffect } from 'react';
-import { useStore } from './store';
-import { IdlePanel } from './components/panels/IdlePanel';
-import { LoadingPanel } from './components/panels/LoadingPanel';
-import { ResultsPanel } from './components/panels/ResultsPanel';
-import { ErrorPanel } from './components/panels/ErrorPanel';
-import { ConfigErrorPanel } from './components/panels/ConfigErrorPanel';
+import { useStore } from '@/store';
+import { IdlePanel } from '@/components/panels/IdlePanel';
+import { LoadingPanel } from '@/components/panels/LoadingPanel';
+import { ResultsPanel } from '@/components/panels/ResultsPanel';
+import { ErrorPanel } from '@/components/panels/ErrorPanel';
+import { ConfigErrorPanel } from '@/components/panels/ConfigErrorPanel';
 
 interface AppProps {
   videoId: string;

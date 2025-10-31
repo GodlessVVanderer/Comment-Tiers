@@ -1,5 +1,4 @@
 // From @google/genai coding guidelines
-// FIX: Export the 'encode' function to make it available to other modules.
 export function encode(bytes: Uint8Array) {
     let binary = '';
     const len = bytes.byteLength;

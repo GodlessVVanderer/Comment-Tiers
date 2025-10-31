@@ -1,9 +1,9 @@
-// FIX: Add chrome type declaration to avoid TypeScript errors in a web extension context.
+// Add chrome type declaration to avoid TypeScript errors in a web extension context.
 declare const chrome: any;
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
-import { useStore } from './store';
+import App from '@/App';
+import { useStore } from '@/store';
 // Explicitly import styles as a string for Shadow DOM injection
 import styles from './style.css?inline';
 
