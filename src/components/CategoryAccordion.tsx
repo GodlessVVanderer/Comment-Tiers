@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 // FIX: Use relative paths for imports
+// FIX: Corrected import path to be relative.
 import { useAppStore } from '../store';
+// FIX: Corrected import path to be relative.
 import { Category } from '../types';
 import { ChevronDownIcon, ChevronUpIcon, MagnifyingGlassIcon, PlusCircleIcon } from './Icons';
 import CommentCard from './CommentCard';

@@ -15,6 +15,8 @@ const parseCommentThread = (item: any): Comment => {
     text: snippet.textDisplay,
     author: snippet.authorDisplayName,
     authorProfileImageUrl: snippet.authorProfileImageUrl,
+    authorChannelUrl: snippet.authorChannelUrl,
+    authorChannelId: snippet.authorChannelId,
     publishedAt: snippet.publishedAt,
     likeCount: snippet.likeCount,
     totalReplyCount: item.snippet.totalReplyCount,

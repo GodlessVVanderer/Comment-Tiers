@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+// FIX: Use a relative path for the import.
 import { Comment } from '../types';
+// FIX: Use a relative path for the import.
 import { ThumbsUpIcon, PencilIcon, CheckIcon, XMarkIcon } from './Icons';
 
 interface CommentCardProps {

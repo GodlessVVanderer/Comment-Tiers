@@ -1,7 +1,7 @@
-import React from 'react';
 // FIX: Use relative path for import
 import { Category } from '../types';
 import { ArrowDownTrayIcon } from './Icons';
+import React from 'react';
 
 interface ExportControlsProps {
   categories: Category[];

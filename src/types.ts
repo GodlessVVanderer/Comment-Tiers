@@ -5,6 +5,8 @@ export interface Comment {
   text: string;
   author: string;
   authorProfileImageUrl: string;
+  authorChannelUrl?: string;
+  authorChannelId?: string;
   publishedAt: string;
   likeCount: number;
   replies: Comment[];

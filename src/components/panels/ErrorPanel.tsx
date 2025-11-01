@@ -1,44 +1,54 @@
-// FIX: Remove reference to chrome types which are unavailable in this environment.
 // FIX: Add chrome declaration to satisfy TypeScript when types are not available.
 declare const chrome: any;
 
+// FIX: Implement the ErrorPanel component to display analysis errors.
 import React from 'react';
 import { useAppStore } from '../../store';
 
 const ErrorPanel = () => {
   const { error, actions } = useAppStore();
 
+  if (!error) return null;
+
+  const getErrorMessage = () => {
+    switch (error.code) {
+      case 'YOUTUBE_API_KEY':
+        return "There's an issue with your YouTube API Key. It might be invalid, expired, or have exceeded its quota. Please check your key in the extension settings.";
+      case 'GEMINI_API_KEY':
+        return "There's an issue with your Gemini API Key. It might be invalid or your billing account may have issues. Please check your key in the extension settings.";
+      case 'GEMINI_API_FAILURE':
+        return `An error occurred while communicating with the Gemini API: ${error.message}`;
+      default:
+        return `An unexpected error occurred: ${error.message}`;
+    }
+  };
+  
   const handleOpenSettings = () => {
     if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-      chrome.runtime.sendMessage({ action: 'openOptionsPage' });
+        chrome.runtime.sendMessage({ action: 'openOptionsPage' });
     }
   };
 
-  const showCheckKeysButton = error?.code?.includes('YOUTUBE') || error?.code?.includes('GEMINI') || error?.message?.includes('API key');
 
   return (
     <div className="text-center p-4 bg-red-900 bg-opacity-50 border border-red-700 rounded-md">
-      <h3 className="text-lg font-bold text-red-300">An Error Occurred</h3>
-      <p className="text-red-400 my-2">{error?.message || 'An unknown error occurred.'}</p>
+      <h3 className="text-lg font-bold text-red-300">Analysis Failed</h3>
+      <p className="text-red-400 my-2">
+        {getErrorMessage()}
+      </p>
       <div className="flex justify-center gap-4 mt-4">
         <button
-          onClick={() => actions.analyze()}
+          onClick={actions.reset}
           className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md"
         >
-          Retry
+          Try Again
         </button>
-        <button
-          onClick={actions.reset}
-          className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md"
-        >
-          Back
-        </button>
-        {showCheckKeysButton && (
+        {(error.code === 'YOUTUBE_API_KEY' || error.code === 'GEMINI_API_KEY') && (
             <button
                 onClick={handleOpenSettings}
-                className="bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded-md"
+                className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md"
             >
-                Check API Keys
+                Open Settings
             </button>
         )}
       </div>

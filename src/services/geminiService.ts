@@ -55,6 +55,12 @@ export const analyzeCommentBatch = async (
 
   const prompt = `Analyze and categorize the following YouTube comments. The ID of each comment is prefixed. Your response must be a valid JSON array matching the provided schema.
 
+**Instructions:**
+- Categorize each comment into one of the provided categories.
+- If a comment is nonsensical, too short to be meaningful, spam, or cannot be categorized, simply exclude its ID from the output.
+- Do NOT create new categories.
+- Always return a valid JSON array, even if no comments can be categorized (in which case, return an empty array for each category).
+
 Categories:
 ${COMMENT_CATEGORIES.map(c => `- ${c.name}: ${c.description}`).join('\n')}
 
