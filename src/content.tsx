@@ -1,6 +1,7 @@
 // FIX: Implement content script to inject the app into YouTube pages.
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+// FIX: Use relative path for module import.
 import App from './App';
 import './style.css';
 

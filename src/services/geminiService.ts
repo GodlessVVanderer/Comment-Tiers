@@ -1,5 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
+// FIX: Use relative path for module import.
 import { COMMENT_CATEGORIES } from "../constants";
+// FIX: Use relative path for module import.
 import { Category, Comment } from "../types";
 
 class GeminiServiceError extends Error {
@@ -19,7 +21,7 @@ const analysisSchema = {
     properties: {
       category: {
         type: Type.STRING,
-        enum: COMMENT_CATEGORIES.map(c => c.name),
+        enum: COMMENT_CATEGORIES.map((c: { name: string; }) => c.name),
       },
       comment_ids: {
         type: Type.ARRAY,
@@ -58,10 +60,10 @@ export const analyzeCommentBatch = async (
 - Always return a valid JSON array, even if no comments can be categorized (in which case, return an empty array for each category).
 
 Categories:
-${COMMENT_CATEGORIES.map(c => `- ${c.name}: ${c.description}`).join('\n')}
+${COMMENT_CATEGORIES.map((c: { name: string; description: string; }) => `- ${c.name}: ${c.description}`).join('\n')}
 
 Comments:
-${comments.map(c => `${c.id}:::${c.author}:::${c.text}`).join('\n\n')}
+${comments.map((c: Comment) => `${c.id}:::${c.author}:::${c.text}`).join('\n\n')}
 `;
 
   try {
@@ -101,7 +103,7 @@ export const summarizeCategory = async (
   category: Category
 ): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey });
-  const commentsText = category.comments.slice(0, 20).map(c => `- ${c.text}`).join('\n');
+  const commentsText = category.comments.slice(0, 20).map((c: Comment) => `- ${c.text}`).join('\n');
 
   const prompt = `Summarize the following comments from the "${category.category}" category in 2-3 sentences. Focus on the main themes and sentiments expressed by the commenters.
 

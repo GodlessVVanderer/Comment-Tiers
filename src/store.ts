@@ -1,7 +1,3 @@
-// FIX: Remove reference to chrome types which are unavailable in this environment.
-// FIX: Add chrome declaration to satisfy TypeScript when types are not available.
-declare const chrome: any;
-
 // FIX: Implement Zustand store for state management.
 import { create } from 'zustand';
 import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
@@ -11,6 +7,9 @@ import * as geminiService from './services/geminiService';
 import * as liveService from './services/liveService';
 import { COMMENT_CATEGORIES, DEFAULT_COMMENT_LIMIT } from './constants';
 import { batch } from './utils';
+
+// This declaration is needed because the chrome types might not be available in all contexts
+declare const chrome: any;
 
 interface AppState {
   youtubeApiKey: string | null;

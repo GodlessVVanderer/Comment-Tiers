@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+// FIX: Use relative path for module import.
 import { useAppStore } from '../store';
-import { Category } from '../types';
+// FIX: Use relative path for module import.
+import { Category, Comment } from '../types';
 import { ChevronDownIcon, ChevronUpIcon, MagnifyingGlassIcon, PlusCircleIcon } from './Icons';
 import CommentCard from './CommentCard';
 
@@ -15,7 +17,7 @@ const CategoryAccordion: React.FC<CategoryAccordionProps> = ({ categoryData, isO
   const [visibleCount, setVisibleCount] = useState(10);
   const { actions } = useAppStore();
 
-  const filteredComments = categoryData.comments.filter(c =>
+  const filteredComments = categoryData.comments.filter((c: Comment) =>
     c.text.toLowerCase().includes(filter.toLowerCase()) ||
     c.author.toLowerCase().includes(filter.toLowerCase())
   );
@@ -67,7 +69,7 @@ const CategoryAccordion: React.FC<CategoryAccordionProps> = ({ categoryData, isO
           </div>
 
           <div className="space-y-4">
-            {filteredComments.slice(0, visibleCount).map((comment) => (
+            {filteredComments.slice(0, visibleCount).map((comment: Comment) => (
               <CommentCard
                 key={comment.id}
                 comment={comment}

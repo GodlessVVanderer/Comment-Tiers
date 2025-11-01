@@ -2,12 +2,14 @@ declare const chrome: any;
 
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
+// FIX: Use relative path for module import.
 import { useAppStore } from './store';
 import './style.css';
 import ApiKeyHelpModal from './components/ApiKeyHelpModal';
 import GeminiApiKeyHelpModal from './components/GeminiApiKeyHelpModal';
 import PricingInfoModal from './components/PricingInfoModal';
 import { EyeIcon, EyeSlashIcon } from './components/Icons';
+// FIX: Use relative path for module import.
 import { COMMENT_LIMIT_OPTIONS } from './constants';
 
 const Options = () => {
@@ -134,7 +136,7 @@ const Options = () => {
                   onChange={(e) => actions.setCommentLimit(Number(e.target.value))}
                   className="bg-gray-700 border border-gray-600 rounded-md p-2 text-sm"
                 >
-                  {COMMENT_LIMIT_OPTIONS.map(limit => (
+                  {COMMENT_LIMIT_OPTIONS.map((limit: number) => (
                     <option key={limit} value={limit}>
                       {limit.toLocaleString()}
                     </option>

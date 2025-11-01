@@ -1,7 +1,9 @@
 import React from 'react';
+// FIX: Use relative path for module import.
 import { useAppStore } from '../store';
 import { MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, LoadingSpinner } from './Icons';
-import { LiveSessionStatus } from '../types';
+// FIX: Use relative path for module import.
+import { LiveSessionStatus, TranscriptionTurn } from '../types';
 
 const statusInfo: Record<LiveSessionStatus, { text: string; icon: React.ReactNode }> = {
   idle: { text: 'Click to start conversation', icon: <MicrophoneIcon /> },
@@ -40,7 +42,7 @@ const LiveConversation: React.FC = () => {
       </div>
       {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
       <div className="mt-4 p-4 bg-gray-900 rounded-md h-48 overflow-y-auto space-y-2">
-        {transcription.map((turn, index) => (
+        {transcription.map((turn: TranscriptionTurn, index: number) => (
             <div key={index} className={`text-sm ${turn.speaker === 'user' ? 'text-gray-300' : 'text-blue-300'}`}>
                 <span className="font-bold capitalize">{turn.speaker}: </span>
                 <span>{turn.text}</span>

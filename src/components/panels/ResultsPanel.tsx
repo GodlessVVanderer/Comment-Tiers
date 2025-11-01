@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+// FIX: Use relative path for module import.
 import { useAppStore } from '../../store';
 import CategoryAccordion from '../CategoryAccordion';
 import StatsCard from '../StatsCard';
 import ExportControls from '../ExportControls';
 import LiveConversation from '../LiveConversation';
 import DonationCTA from '../DonationCTA';
-import { formatNumber } from '../../utils';
+// FIX: Use relative path for module import.
+import { Category } from '../../types';
 
 const ResultsPanel: React.FC = () => {
   const { results, actions } = useAppStore();
@@ -29,7 +31,7 @@ const ResultsPanel: React.FC = () => {
   };
 
   const handleExpandAll = () => {
-    setOpenCategories(new Set(categories.map(c => c.category)));
+    setOpenCategories(new Set(categories.map((c: Category) => c.category)));
   };
 
   const handleCollapseAll = () => {
@@ -56,7 +58,7 @@ const ResultsPanel: React.FC = () => {
                 </button>
             </div>
             <div className="space-y-2">
-              {categories.map((category) => (
+              {categories.map((category: Category) => (
                 <CategoryAccordion 
                   key={category.category} 
                   categoryData={category}

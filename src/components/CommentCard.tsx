@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+// FIX: Use relative path for module import.
 import { Comment } from '../types';
 import { ThumbsUpIcon, PencilIcon, CheckIcon, XMarkIcon } from './Icons';
 
@@ -85,7 +86,7 @@ const CommentCard: React.FC<CommentCardProps> = ({ comment, onAddReply, onEditCo
       </div>
       {comment.replies?.length > 0 && (
         <div className="mt-3 pl-11 space-y-3">
-          {comment.replies.map(reply => (
+          {comment.replies.map((reply: Comment) => (
              <CommentCard key={reply.id} comment={{...reply, replies: []}} onAddReply={onAddReply} onEditComment={onEditComment} onLoadMoreReplies={onLoadMoreReplies} />
           ))}
         </div>

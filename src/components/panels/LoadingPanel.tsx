@@ -1,9 +1,13 @@
 import React from 'react';
+// FIX: Use relative path for module import.
 import { useAppStore } from '../../store';
 import { LoadingSpinner } from '../Icons';
+// FIX: Use relative path for module import.
 import { formatEta } from '../../utils';
+// FIX: Use relative path for module import.
+import { ProgressPhase } from '../../types';
 
-const phaseTextMap = {
+const phaseTextMap: Record<ProgressPhase, string> = {
   fetching: 'Fetching comments from YouTube...',
   filtering: 'Filtering out spam and low-effort comments...',
   analyzing: 'Analyzing comments with Gemini AI...',

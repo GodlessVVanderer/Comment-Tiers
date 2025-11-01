@@ -1,5 +1,6 @@
 import React from 'react';
-import { Category } from '../types';
+// FIX: Use relative path for module import.
+import { Category, Comment } from '../types';
 import { ArrowDownTrayIcon } from './Icons';
 
 interface ExportControlsProps {
@@ -21,7 +22,7 @@ const ExportControls: React.FC<ExportControlsProps> = ({ categories }) => {
   const convertToCSV = () => {
     let csv = 'Category,Summary,Comment Author,Comment Text,Likes,Published At\n';
     categories.forEach(category => {
-        category.comments.forEach(comment => {
+        category.comments.forEach((comment: Comment) => {
             const row = [
                 `"${category.category}"`,
                 `"${(category.summary || '').replace(/"/g, '""')}"`,

@@ -1,5 +1,7 @@
 import React from 'react';
+// FIX: Use relative path for module import.
 import { useAppStore } from '../../store';
+// FIX: Use relative path for module import.
 import { COMMENT_LIMIT_OPTIONS } from '../../constants';
 
 const IdlePanel = () => {
@@ -17,7 +19,7 @@ const IdlePanel = () => {
           onChange={(e) => actions.setCommentLimit(Number(e.target.value))}
           className="bg-gray-700 border border-gray-600 rounded-md p-2 text-sm"
         >
-          {COMMENT_LIMIT_OPTIONS.map(limit => (
+          {COMMENT_LIMIT_OPTIONS.map((limit: number) => (
             <option key={limit} value={limit}>
               {limit.toLocaleString()}
             </option>

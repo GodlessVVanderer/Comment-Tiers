@@ -1,6 +1,7 @@
 declare const chrome: any;
 
 import React from 'react';
+// FIX: Use relative path for module import.
 import { useAppStore } from '../../store';
 
 const ErrorPanel = () => {

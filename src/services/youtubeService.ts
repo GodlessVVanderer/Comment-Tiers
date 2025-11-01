@@ -1,4 +1,6 @@
+// FIX: Use relative path for module import.
 import { YOUTUBE_API_BASE_URL } from '../constants';
+// FIX: Use relative path for module import.
 import { Comment } from '../types';
 
 export const getVideoIdFromUrl = (): string | null => {

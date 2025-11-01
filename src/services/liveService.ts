@@ -1,5 +1,7 @@
 import { GoogleGenAI, LiveServerMessage, Modality, Blob } from '@google/genai';
+// FIX: Use relative path for module import.
 import { encode, decode, decodeAudioData } from '../audioUtils';
+// FIX: Use relative path for module import.
 import { LiveSessionStatus, TranscriptionTurn } from '../types';
 
 let sessionPromise: Promise<any> | null = null;
