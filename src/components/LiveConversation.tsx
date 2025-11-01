@@ -1,13 +1,10 @@
 import React from 'react';
-// FIX: Use relative paths for imports
 import { useAppStore } from '../store';
-// FIX: Add LoadingSpinner to handle the 'loading' state icon.
 import { MicrophoneIcon, StopCircleIcon, SpeakerWaveIcon, LoadingSpinner } from './Icons';
 import { LiveSessionStatus } from '../types';
 
 const statusInfo: Record<LiveSessionStatus, { text: string; icon: React.ReactNode }> = {
   idle: { text: 'Click to start conversation', icon: <MicrophoneIcon /> },
-  // FIX: Add missing 'loading' state to satisfy the LiveSessionStatus type.
   loading: { text: 'Connecting...', icon: <LoadingSpinner className="h-6 w-6" /> },
   listening: { text: 'Listening...', icon: <MicrophoneIcon className="h-6 w-6 text-green-400" /> },
   processing: { text: 'Thinking...', icon: <div className="h-6 w-6 rounded-full bg-yellow-400 animate-pulse" /> },

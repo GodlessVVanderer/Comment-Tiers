@@ -1,4 +1,3 @@
-// FIX: Implement YouTube service for fetching comments.
 import { YOUTUBE_API_BASE_URL } from '../constants';
 import { Comment } from '../types';
 
@@ -50,7 +49,6 @@ export const fetchAllComments = async (
       const response = await fetch(url.toString());
       if (!response.ok) {
         const errorData = await response.json();
-        // FIX: Create Error object without 'cause' in constructor for compatibility.
         const err = new Error(`YouTube API Error: ${errorData.error.message}`);
         (err as any).cause = 'YOUTUBE_API_KEY';
         throw err;

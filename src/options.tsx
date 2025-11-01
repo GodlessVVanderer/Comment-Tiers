@@ -1,9 +1,5 @@
-// FIX: Remove reference to chrome types which are unavailable in this environment.
-// FIX: Add chrome declaration to satisfy TypeScript when types are not available.
 declare const chrome: any;
 
-// FIX: Implement the extension options page.
-// FIX: Correct import syntax for hooks.
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { useAppStore } from './store';
@@ -28,8 +24,6 @@ const Options = () => {
   const [gKeyError, setGKeyError] = useState('');
 
   useEffect(() => {
-    // Zustand persistence might take a moment to rehydrate
-    // FIX: `onRehydrate` is deprecated in zustand's persist middleware. Using `onFinishHydration` instead.
     const unsubscribe = useAppStore.persist.onFinishHydration(() => {
       const state = useAppStore.getState();
       setYtKey(state.youtubeApiKey || '');

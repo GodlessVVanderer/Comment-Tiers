@@ -1,9 +1,7 @@
-// FIX: Implement Gemini service for comment analysis and summarization.
 import { GoogleGenAI, Type } from "@google/genai";
 import { COMMENT_CATEGORIES } from "../constants";
 import { Category, Comment } from "../types";
 
-// FIX: Create a custom error class to handle specific error codes and causes.
 class GeminiServiceError extends Error {
     cause: string;
 
@@ -49,8 +47,6 @@ export const analyzeCommentBatch = async (
   apiKey: string,
   comments: Comment[]
 ): Promise<Array<{ category: string; comment_ids: string[] }>> => {
-  // NOTE: In a browser extension context, API keys are managed by the user
-  // and passed from secure storage, rather than using process.env.
   const ai = new GoogleGenAI({ apiKey });
 
   const prompt = `Analyze and categorize the following YouTube comments. The ID of each comment is prefixed. Your response must be a valid JSON array matching the provided schema.
@@ -69,7 +65,6 @@ ${comments.map(c => `${c.id}:::${c.author}:::${c.text}`).join('\n\n')}
 `;
 
   try {
-    // FIX: Use ai.models.generateContent
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
@@ -79,7 +74,6 @@ ${comments.map(c => `${c.id}:::${c.author}:::${c.text}`).join('\n\n')}
       },
     });
 
-    // FIX: Access text directly from response and handle potential undefined value
     const jsonString = response.text;
     if (typeof jsonString !== 'string') {
       throw new GeminiServiceError("Received empty or invalid response from Gemini.", 'GEMINI_API_FAILURE');
@@ -116,7 +110,6 @@ ${commentsText}
 `;
 
   try {
-    // FIX: Use ai.models.generateContent for summarization
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
@@ -126,7 +119,6 @@ ${commentsText}
       }
     });
     
-    // FIX: Access text directly from response and handle potential undefined value
     const jsonString = response.text;
     if (typeof jsonString !== 'string') {
         throw new GeminiServiceError(`Received empty summary response for category "${category.category}".`, 'GEMINI_API_FAILURE');

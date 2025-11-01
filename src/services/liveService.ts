@@ -1,4 +1,3 @@
-// FIX: Implement Live service for real-time conversation.
 import { GoogleGenAI, LiveServerMessage, Modality, Blob } from '@google/genai';
 import { encode, decode, decodeAudioData } from '../audioUtils';
 import { LiveSessionStatus, TranscriptionTurn } from '../types';

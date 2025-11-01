@@ -1,7 +1,5 @@
-// FIX: Add chrome declaration to satisfy TypeScript when types are not available.
 declare const chrome: any;
 
-// FIX: Implement the ErrorPanel component to display analysis errors.
 import React from 'react';
 import { useAppStore } from '../../store';
 
