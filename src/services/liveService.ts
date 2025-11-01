@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, LiveServerMessage, Modality, Blob } from '@google/genai';
 // FIX: Use relative path for module import.
 import { encode, decode, decodeAudioData } from '../audioUtils';
@@ -32,6 +33,7 @@ function createBlob(data: Float32Array): Blob {
 }
 
 export const startSession = async (apiKey: string, callbacks: LiveCallbacks): Promise<void> => {
+    // FIX: Initialize GoogleGenAI with the API key object.
     const ai = new GoogleGenAI({ apiKey });
     
     inputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
@@ -43,6 +45,7 @@ export const startSession = async (apiKey: string, callbacks: LiveCallbacks): Pr
     try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         
+        // FIX: Use ai.live.connect to start a live session.
         sessionPromise = ai.live.connect({
             model: 'gemini-2.5-flash-native-audio-preview-09-2025',
             config: {
@@ -81,6 +84,8 @@ export const startSession = async (apiKey: string, callbacks: LiveCallbacks): Pr
                         callbacks.onTranscriptionUpdate({ speaker: 'model', text: currentOutputTranscription });
                     }
                     if(message.serverContent?.turnComplete) {
+                        callbacks.onTranscriptionUpdate({ speaker: 'user', text: currentInputTranscription, isFinal: true });
+                        callbacks.onTranscriptionUpdate({ speaker: 'model', text: currentOutputTranscription, isFinal: true });
                         currentInputTranscription = '';
                         currentOutputTranscription = '';
                     }

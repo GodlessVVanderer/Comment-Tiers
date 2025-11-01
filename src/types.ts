@@ -1,61 +1,48 @@
-// FIX: Define all necessary types for the application
-
-export interface Comment {
+export interface YouTubeComment {
   id: string;
   text: string;
   author: string;
   authorProfileImageUrl: string;
-  authorChannelUrl?: string;
-  authorChannelId?: string;
-  publishedAt: string;
   likeCount: number;
-  replies: Comment[];
-  totalReplyCount: number;
-  isEditable?: boolean;
-  isRepliesLoading?: boolean;
-  nextPageToken?: string;
+  replyCount: number;
+  publishedAt: string;
 }
 
-export interface Category {
-  category: string;
-  summary: string;
-  comments: Comment[];
+export interface CommentCategory {
+  name: string;
+  description: string;
+  comments: YouTubeComment[];
+  count: number;
+}
+
+export interface AnalysisResult {
+  totalComments: number;
+  analyzedComments: number;
+  categories: CommentCategory[];
 }
 
 export interface AnalysisStats {
   totalComments: number;
-  filteredComments: number;
   analyzedComments: number;
+  questions: number;
+  feedback: number;
+  positive: number;
+  negative: number;
 }
 
-export interface AnalysisResults {
-  stats: AnalysisStats;
-  categories: Category[];
-}
-
-export type AppStatus = 'idle' | 'loading' | 'results' | 'error' | 'config-error' | 'configuring';
-export type ProgressPhase = 'fetching' | 'filtering' | 'analyzing' | 'summarizing';
+export type AppStatus = 'idle' | 'loading' | 'error' | 'results' | 'config-error';
 
 export interface Progress {
-  phase: ProgressPhase;
-  percent: number;
-  processed?: number;
-  total?: number;
-  etaSeconds?: number;
+  value: number;
+  text: string;
+  eta?: number;
 }
 
-export interface AppError {
-  code: string;
-  message: string;
-}
+// For live conversation feature
+export type LiveSessionStatus = 'idle' | 'loading' | 'listening' | 'processing' | 'speaking';
 
-export type LiveSessionStatus = 'idle' | 'listening' | 'processing' | 'speaking' | 'loading';
 export interface TranscriptionTurn {
   speaker: 'user' | 'model';
   text: string;
-}
-export interface LiveSessionState {
-  status: LiveSessionStatus;
-  transcription: TranscriptionTurn[];
-  error: string | null;
+  isFinal?: boolean;
 }

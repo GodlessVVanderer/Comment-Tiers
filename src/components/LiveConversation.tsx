@@ -31,7 +31,7 @@ const LiveConversation: React.FC = () => {
       <div className="flex items-center gap-4">
         <button
           onClick={handleToggleSession}
-          className={`p-3 rounded-full ${status === 'idle' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}`}
+          className={`p-3 rounded-full transition-colors ${status === 'idle' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}`}
         >
           {status === 'idle' ? <MicrophoneIcon /> : <StopCircleIcon />}
         </button>
@@ -48,7 +48,7 @@ const LiveConversation: React.FC = () => {
                 <span>{turn.text}</span>
             </div>
         ))}
-         {transcription.length === 0 && <p className="text-gray-500 text-sm">Conversation will appear here...</p>}
+         {transcription.length === 0 && status !== 'loading' && <p className="text-gray-500 text-sm">Conversation will appear here...</p>}
       </div>
     </div>
   );

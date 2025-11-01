@@ -1,145 +1,86 @@
-import { GoogleGenAI, Type } from "@google/genai";
-// FIX: Use relative path for module import.
-import { COMMENT_CATEGORIES } from "../constants";
-// FIX: Use relative path for module import.
-import { Category, Comment } from "../types";
+import { GoogleGenAI, Type } from '@google/genai';
+import { YouTubeComment, AnalysisResult, CommentCategory } from '../types';
+import { COMMENT_CATEGORIES } from '../constants';
+import { batch } from '../utils';
 
-class GeminiServiceError extends Error {
-    cause: string;
+const BATCH_SIZE = 50; // Number of comments to process in a single API call
 
-    constructor(message: string, cause: string) {
-        super(message);
-        this.name = 'GeminiServiceError';
-        this.cause = cause;
-    }
-}
+export const analyzeComments = async (
+  comments: YouTubeComment[],
+  apiKey: string,
+  onProgress: (progress: { processed: number; total: number; eta: number }) => void
+): Promise<AnalysisResult> => {
+  // FIX: Use new GoogleGenAI({apiKey})
+  const ai = new GoogleGenAI({ apiKey: apiKey });
 
-const analysisSchema = {
-  type: Type.ARRAY,
-  items: {
-    type: Type.OBJECT,
-    properties: {
-      category: {
-        type: Type.STRING,
-        enum: COMMENT_CATEGORIES.map((c: { name: string; }) => c.name),
-      },
-      comment_ids: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.STRING,
+  const categories: Record<string, CommentCategory> = {};
+  COMMENT_CATEGORIES.forEach(c => {
+    categories[c.name] = { ...c, comments: [], count: 0 };
+  });
+
+  const commentBatches = batch(comments, BATCH_SIZE);
+  let processedCount = 0;
+  const startTime = Date.now();
+
+  const systemInstruction = `You are an expert at analyzing YouTube comments. You will be given a batch of comments in JSON format. Your task is to categorize each comment into one of the following categories: ${COMMENT_CATEGORIES.map(c => `"${c.name}"`).join(', ')}. Your response must be a valid JSON array of objects, where each object has two keys: "id" (the original comment ID) and "category" (the assigned category name). Do not include any other text or explanation in your response.`;
+
+  for (const commentBatch of commentBatches) {
+    const prompt = `Please categorize the following comments:\n${JSON.stringify(
+      commentBatch.map(c => ({ id: c.id, text: c.text }))
+    )}`;
+
+    try {
+      // FIX: Use ai.models.generateContent
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                id: { type: Type.STRING },
+                category: { type: Type.STRING },
+              },
+              required: ['id', 'category'],
+            },
+          },
         },
-      },
-    },
-    required: ["category", "comment_ids"],
-  },
-};
+      });
 
-const summarySchema = {
-    type: Type.OBJECT,
-    properties: {
-        summary: {
-            type: Type.STRING,
-            description: "A concise summary of the provided comments in 2-3 sentences."
+      // FIX: Use response.text to get string output
+      const jsonText = response.text.trim();
+      const results: { id: string; category: string }[] = JSON.parse(jsonText);
+
+      results.forEach(result => {
+        const comment = comments.find(c => c.id === result.id);
+        if (comment && categories[result.category]) {
+          categories[result.category].comments.push(comment);
+          categories[result.category].count++;
         }
-    },
-    required: ["summary"],
-};
-
-export const analyzeCommentBatch = async (
-  apiKey: string,
-  comments: Comment[]
-): Promise<Array<{ category: string; comment_ids: string[] }>> => {
-  const ai = new GoogleGenAI({ apiKey });
-
-  const prompt = `Analyze and categorize the following YouTube comments. The ID of each comment is prefixed. Your response must be a valid JSON array matching the provided schema.
-
-**Instructions:**
-- Categorize each comment into one of the provided categories.
-- If a comment is nonsensical, too short to be meaningful, spam, or cannot be categorized, simply exclude its ID from the output.
-- Do NOT create new categories.
-- Always return a valid JSON array, even if no comments can be categorized (in which case, return an empty array for each category).
-
-Categories:
-${COMMENT_CATEGORIES.map((c: { name: string; description: string; }) => `- ${c.name}: ${c.description}`).join('\n')}
-
-Comments:
-${comments.map((c: Comment) => `${c.id}:::${c.author}:::${c.text}`).join('\n\n')}
-`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: analysisSchema,
-      },
-    });
-
-    const jsonString = response.text;
-    if (typeof jsonString !== 'string') {
-      throw new GeminiServiceError("Received empty or invalid response from Gemini.", 'GEMINI_API_FAILURE');
+      });
+    } catch (e) {
+      console.error('Error processing batch:', e);
+      // Skip batch on error to avoid halting entire process
     }
-    const result = JSON.parse(jsonString);
-    return result as Array<{ category: string; comment_ids: string[] }>;
-  } catch (error) {
-    console.error("Error analyzing comment batch:", error);
 
-    if (error instanceof SyntaxError) {
-        throw new GeminiServiceError("Failed to parse response from Gemini.", 'GEMINI_API_FAILURE');
-    }
-    if (error instanceof Error && error.message.includes('API key not valid')) {
-       throw new GeminiServiceError("Invalid Gemini API key.", 'GEMINI_API_KEY');
-    }
-    if (error instanceof GeminiServiceError) {
-        throw error;
-    }
-    throw new GeminiServiceError("Failed to analyze comments with Gemini.", 'GEMINI_API_FAILURE');
-  }
-};
-
-export const summarizeCategory = async (
-  apiKey: string,
-  category: Category
-): Promise<string> => {
-  const ai = new GoogleGenAI({ apiKey });
-  const commentsText = category.comments.slice(0, 20).map((c: Comment) => `- ${c.text}`).join('\n');
-
-  const prompt = `Summarize the following comments from the "${category.category}" category in 2-3 sentences. Focus on the main themes and sentiments expressed by the commenters.
-
-Comments:
-${commentsText}
-`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: summarySchema,
-      }
-    });
+    processedCount += commentBatch.length;
+    const elapsedTime = (Date.now() - startTime) / 1000;
+    const commentsPerSecond = processedCount / elapsedTime;
+    const remainingComments = comments.length - processedCount;
+    const eta = commentsPerSecond > 0 ? Math.round(remainingComments / commentsPerSecond) : -1;
     
-    const jsonString = response.text;
-    if (typeof jsonString !== 'string') {
-        throw new GeminiServiceError(`Received empty summary response for category "${category.category}".`, 'GEMINI_API_FAILURE');
-    }
-    const result: { summary: string } = JSON.parse(jsonString);
-    return result.summary;
-
-  } catch (error) {
-    console.error(`Error summarizing category ${category.category}:`, error);
-    
-    if (error instanceof SyntaxError) {
-        throw new GeminiServiceError(`Failed to parse summary for category "${category.category}".`, 'GEMINI_API_FAILURE');
-    }
-    if (error instanceof Error && error.message.includes('API key not valid')) {
-       throw new GeminiServiceError("Invalid Gemini API key.", 'GEMINI_API_KEY');
-    }
-    if (error instanceof GeminiServiceError) {
-        throw error;
-    }
-    throw new GeminiServiceError(`Failed to summarize category "${category.category}".`, 'GEMINI_API_FAILURE');
+    onProgress({ processed: processedCount, total: comments.length, eta });
   }
+
+  const sortedCategories = Object.values(categories).sort((a, b) => b.count - a.count);
+
+  return {
+    totalComments: comments.length,
+    analyzedComments: processedCount,
+    categories: sortedCategories,
+  };
 };

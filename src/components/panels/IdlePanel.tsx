@@ -1,42 +1,61 @@
-import React from 'react';
-// FIX: Use relative path for module import.
+import React, { useState } from 'react';
 import { useAppStore } from '../../store';
-// FIX: Use relative path for module import.
-import { COMMENT_LIMIT_OPTIONS } from '../../constants';
+import { COMMENT_LIMIT_OPTIONS, DEFAULT_COMMENT_LIMIT } from '../../constants';
+import PricingInfoModal from '../PricingInfoModal';
+import { InfoIcon } from '../Icons';
 
-const IdlePanel = () => {
-  const { actions, commentLimit } = useAppStore();
+interface IdlePanelProps {
+  videoId: string;
+}
+
+const IdlePanel: React.FC<IdlePanelProps> = ({ videoId }) => {
+  const { startAnalysis } = useAppStore(state => state.actions);
+  const [commentLimit, setCommentLimit] = useState(DEFAULT_COMMENT_LIMIT);
+  const [isPricingInfoVisible, setPricingInfoVisible] = useState(false);
+
+  const handleStart = () => {
+    startAnalysis(videoId, commentLimit);
+  };
 
   return (
-    <div className="text-center p-8">
-      <div className="mb-6">
-        <label htmlFor="comment-limit" className="block text-sm font-medium text-gray-400 mb-2">
-          Number of comments to analyze:
-        </label>
-        <select
-          id="comment-limit"
-          value={commentLimit}
-          onChange={(e) => actions.setCommentLimit(Number(e.target.value))}
-          className="bg-gray-700 border border-gray-600 rounded-md p-2 text-sm"
+    <div className="text-center p-4">
+      <h2 className="text-xl font-bold mb-4">Analyze Comments</h2>
+      <p className="text-gray-400 mb-6">
+        Get an AI-powered breakdown of the comments on this video.
+      </p>
+
+      <div className="max-w-sm mx-auto space-y-4">
+        <div>
+          <label htmlFor="comment-limit" className="block text-sm font-medium text-gray-400 mb-1">
+            Max comments to analyze
+          </label>
+          <select
+            id="comment-limit"
+            value={commentLimit}
+            onChange={(e) => setCommentLimit(Number(e.target.value))}
+            className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white"
+          >
+            {COMMENT_LIMIT_OPTIONS.map(option => (
+              <option key={option} value={option}>{option.toLocaleString()}</option>
+            ))}
+          </select>
+        </div>
+        <button
+          onClick={handleStart}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-md text-lg"
         >
-          {COMMENT_LIMIT_OPTIONS.map((limit: number) => (
-            <option key={limit} value={limit}>
-              {limit.toLocaleString()}
-            </option>
-          ))}
-        </select>
+          Start Analysis
+        </button>
+        <button
+            onClick={() => setPricingInfoVisible(true)}
+            className="flex items-center justify-center gap-2 text-xs text-gray-500 hover:text-gray-300 mx-auto"
+        >
+            <InfoIcon className="h-4 w-4" />
+            API Usage & Pricing Info
+        </button>
       </div>
-      <button
-        onClick={() => actions.analyze()}
-        className='bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-md transition-colors duration-200 text-lg'
-      >
-        Analyze Comments
-      </button>
-       <div className="mt-6 flex justify-center items-center gap-4">
-          <button onClick={() => useAppStore.getState().actions.togglePricingModal()} className="text-xs text-gray-400 hover:underline">API Usage Info</button>
-          <span className="text-gray-600">|</span>
-           <a href="https://github.com/google/aistudio-web" target="_blank" rel="noopener noreferrer" className="text-xs text-gray-400 hover:underline">View on GitHub</a>
-      </div>
+
+      {isPricingInfoVisible && <PricingInfoModal onClose={() => setPricingInfoVisible(false)} />}
     </div>
   );
 };

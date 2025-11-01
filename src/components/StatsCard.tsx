@@ -1,23 +1,17 @@
 import React from 'react';
-// FIX: Use relative path for module import.
-import { formatNumber } from '../utils';
 
 interface StatsCardProps {
-  title: string;
-  value: number | string;
-  icon?: React.ReactNode;
+  label: string;
+  value: string | number;
+  description?: string;
 }
 
-const StatsCard: React.FC<StatsCardProps> = ({ title, value, icon }) => {
-  const displayValue = typeof value === 'number' ? formatNumber(value) : value;
-
+const StatsCard: React.FC<StatsCardProps> = ({ label, value, description }) => {
   return (
-    <div className="bg-gray-700 p-4 rounded-lg flex items-center">
-      {icon && <div className="mr-4 text-gray-400">{icon}</div>}
-      <div>
-        <p className="text-sm text-gray-400">{title}</p>
-        <p className="text-2xl font-bold">{displayValue}</p>
-      </div>
+    <div className="bg-gray-700 p-4 rounded-lg text-center">
+      <h4 className="text-sm text-gray-400">{label}</h4>
+      <p className="text-2xl font-bold mt-1">{value}</p>
+      {description && <p className="text-xs text-gray-500 mt-1">{description}</p>}
     </div>
   );
 };

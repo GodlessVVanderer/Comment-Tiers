@@ -1,54 +1,55 @@
-// FIX: Implement content script to inject the app into YouTube pages.
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-// FIX: Use relative path for module import.
 import App from './App';
 import './style.css';
 
-const APP_ROOT_ID = 'youtube-comment-analyzer-root';
-let currentVideoId: string | null = null;
+const MOUNT_POINT_SELECTOR = '#secondary.style-scope.ytd-watch-flexy';
+const APP_CONTAINER_ID = 'youtube-comment-analyzer-root';
+
+let root: ReactDOM.Root | null = null;
 
 const injectApp = () => {
-    const playerContainer = document.querySelector('#player-container.ytd-watch-flexy');
-    const existingRoot = document.getElementById(APP_ROOT_ID);
-  
-    if (playerContainer && !existingRoot) {
-      const appRoot = document.createElement('div');
-      appRoot.id = APP_ROOT_ID;
-      playerContainer.parentNode?.insertBefore(appRoot, playerContainer.nextSibling);
-  
-      const root = ReactDOM.createRoot(appRoot);
-      root.render(
+    const mountPoint = document.querySelector(MOUNT_POINT_SELECTOR);
+
+    if (mountPoint && !document.getElementById(APP_CONTAINER_ID)) {
+        const appContainer = document.createElement('div');
+        appContainer.id = APP_CONTAINER_ID;
+        // Inject as the first element in the secondary column
+        mountPoint.prepend(appContainer);
+
+        root = ReactDOM.createRoot(appContainer);
+        root.render(
         <React.StrictMode>
-          <App />
+            <App />
         </React.StrictMode>
-      );
+        );
     }
 }
 
-// Initial injection
-setTimeout(injectApp, 1000);
-
-
-// Observe for SPA navigation
-const observer = new MutationObserver(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const videoId = urlParams.get('v');
-
-    if (videoId !== currentVideoId) {
-        currentVideoId = videoId;
-        const existingRoot = document.getElementById(APP_ROOT_ID);
-        if(existingRoot) {
-            existingRoot.remove();
-        }
-        if(videoId) {
-            // Wait for the page to likely have the player container
-            setTimeout(injectApp, 1000);
-        }
+const observer = new MutationObserver((mutations, obs) => {
+    const mountPoint = document.querySelector(MOUNT_POINT_SELECTOR);
+    if(mountPoint) {
+        injectApp();
+        obs.disconnect();
     }
 });
 
-observer.observe(document.body, {
-  childList: true,
-  subtree: true,
-});
+// For YouTube's SPA navigation
+let lastUrl = location.href; 
+new MutationObserver(() => {
+  const url = location.href;
+  if (url !== lastUrl) {
+    lastUrl = url;
+    // URL has changed, re-check for injection point
+    const container = document.getElementById(APP_CONTAINER_ID);
+    if (container) {
+        root?.unmount();
+        container.remove();
+    }
+    // Delay injection to allow YouTube to render the new page
+    setTimeout(injectApp, 1000);
+  }
+}).observe(document, {subtree: true, childList: true});
+
+
+injectApp();

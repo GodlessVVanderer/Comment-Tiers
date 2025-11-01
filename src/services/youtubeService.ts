@@ -1,79 +1,72 @@
-// FIX: Use relative path for module import.
+import { YouTubeComment } from '../types';
 import { YOUTUBE_API_BASE_URL } from '../constants';
-// FIX: Use relative path for module import.
-import { Comment } from '../types';
 
-export const getVideoIdFromUrl = (): string | null => {
-  const url = window.location.href;
-  const match = url.match(/(?:v=)([^&?]+)/);
-  return match ? match[1] : null;
-};
+const MAX_RESULTS_PER_PAGE = 100;
 
-const parseCommentThread = (item: any): Comment => {
-  const snippet = item.snippet.topLevelComment.snippet;
-  return {
-    id: item.snippet.topLevelComment.id,
-    text: snippet.textDisplay,
-    author: snippet.authorDisplayName,
-    authorProfileImageUrl: snippet.authorProfileImageUrl,
-    authorChannelUrl: snippet.authorChannelUrl,
-    authorChannelId: snippet.authorChannelId,
-    publishedAt: snippet.publishedAt,
-    likeCount: snippet.likeCount,
-    totalReplyCount: item.snippet.totalReplyCount,
-    replies: [],
-  };
-};
-
-export const fetchAllComments = async (
-  apiKey: string,
+export const fetchComments = async (
   videoId: string,
+  apiKey: string,
   limit: number,
-  onProgress: (progress: { percent: number, processed: number, total: number }) => void
-): Promise<Comment[]> => {
-  let comments: Comment[] = [];
+  onProgress: (progress: { fetched: number; total: number | 'unknown'; value: number }) => void
+): Promise<YouTubeComment[]> => {
+  let comments: YouTubeComment[] = [];
   let nextPageToken: string | undefined = undefined;
-  let fetchedCount = 0;
-  let totalCommentsToFetch = limit;
 
+  onProgress({ fetched: 0, total: limit, value: 0 });
+  
   try {
-    do {
-      const url = new URL(`${YOUTUBE_API_BASE_URL}/commentThreads`);
-      url.searchParams.set('part', 'snippet,replies');
-      url.searchParams.set('videoId', videoId);
-      url.searchParams.set('key', apiKey);
-      url.searchParams.set('maxResults', '100');
-      url.searchParams.set('order', 'relevance');
-      if (nextPageToken) {
-        url.searchParams.set('pageToken', nextPageToken);
-      }
+    // First call to get total comment count info
+    const initialUrl = `${YOUTUBE_API_BASE_URL}/commentThreads?part=snippet,replies&videoId=${videoId}&key=${apiKey}&maxResults=${MAX_RESULTS_PER_PAGE}&order=relevance`;
+    const initialResponse = await fetch(initialUrl);
+    
+    if (!initialResponse.ok) {
+        const errorData = await initialResponse.json();
+        throw new Error(errorData.error.message || `HTTP error! status: ${initialResponse.status}`);
+    }
+
+    const initialData = await initialResponse.json();
+
+    const totalResults = initialData.pageInfo?.totalResults ?? limit;
+    const totalToFetch = Math.min(totalResults, limit);
+
+    let currentData = initialData;
+
+    while (comments.length < limit) {
+      const fetchedComments = currentData.items?.map((item: any) => {
+        const snippet = item.snippet.topLevelComment.snippet;
+        return {
+          id: item.snippet.topLevelComment.id,
+          text: snippet.textDisplay,
+          author: snippet.authorDisplayName,
+          authorProfileImageUrl: snippet.authorProfileImageUrl,
+          likeCount: snippet.likeCount,
+          replyCount: item.snippet.totalReplyCount,
+          publishedAt: snippet.publishedAt,
+        };
+      }) || [];
+
+      comments = comments.concat(fetchedComments);
+      nextPageToken = currentData.nextPageToken;
       
-      const response = await fetch(url.toString());
-      if (!response.ok) {
+      const progressValue = Math.min(Math.round((comments.length / totalToFetch) * 50), 50);
+      onProgress({ fetched: comments.length, total: totalToFetch, value: progressValue });
+
+      if (!nextPageToken || comments.length >= limit) {
+        break;
+      }
+
+      const nextUrl = `${YOUTUBE_API_BASE_URL}/commentThreads?part=snippet,replies&videoId=${videoId}&key=${apiKey}&maxResults=${MAX_RESULTS_PER_PAGE}&pageToken=${nextPageToken}&order=relevance`;
+      const response = await fetch(nextUrl);
+      if(!response.ok){
         const errorData = await response.json();
-        const err = new Error(`YouTube API Error: ${errorData.error.message}`);
-        (err as any).cause = 'YOUTUBE_API_KEY';
-        throw err;
+        throw new Error(errorData.error.message || `HTTP error! status: ${response.status}`);
       }
-      
-      const data = await response.json();
-      const newComments = data.items.map(parseCommentThread);
-      comments.push(...newComments);
-      fetchedCount += newComments.length;
-      
-      nextPageToken = data.nextPageToken;
-
-      if (fetchedCount === newComments.length) { // On first fetch, set total
-          totalCommentsToFetch = Math.min(limit, data.pageInfo.totalResults);
-      }
-      
-      onProgress({ percent: (fetchedCount / totalCommentsToFetch) * 100, processed: fetchedCount, total: totalCommentsToFetch });
-
-    } while (nextPageToken && comments.length < limit);
-
+      currentData = await response.json();
+    }
+    
     return comments.slice(0, limit);
   } catch (error) {
-    console.error("Error fetching comments:", error);
+    console.error('Failed to fetch comments:', error);
     throw error;
   }
 };

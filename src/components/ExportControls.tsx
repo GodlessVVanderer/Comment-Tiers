@@ -1,65 +1,58 @@
 import React from 'react';
-// FIX: Use relative path for module import.
-import { Category, Comment } from '../types';
-import { ArrowDownTrayIcon } from './Icons';
+import { useAppStore } from '../store';
 
-interface ExportControlsProps {
-  categories: Category[];
-}
+const ExportControls: React.FC = () => {
+  const { analysisResult } = useAppStore();
 
-const ExportControls: React.FC<ExportControlsProps> = ({ categories }) => {
+  const downloadJSON = () => {
+    if (!analysisResult) return;
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(analysisResult, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "comment_analysis.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  };
   
-  const handleExportJson = () => {
-    const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(
-      JSON.stringify(categories, null, 2)
-    )}`;
-    const link = document.createElement('a');
-    link.href = jsonString;
-    link.download = 'comment-analysis.json';
-    link.click();
-  };
+  const downloadCSV = () => {
+    if (!analysisResult) return;
 
-  const convertToCSV = () => {
-    let csv = 'Category,Summary,Comment Author,Comment Text,Likes,Published At\n';
-    categories.forEach(category => {
-        category.comments.forEach((comment: Comment) => {
-            const row = [
-                `"${category.category}"`,
-                `"${(category.summary || '').replace(/"/g, '""')}"`,
-                `"${comment.author.replace(/"/g, '""')}"`,
-                `"${comment.text.replace(/"/g, '""')}"`,
-                comment.likeCount,
-                comment.publishedAt
-            ].join(',');
-            csv += row + '\n';
-        });
+    let csvContent = "category,author,comment,likes,replies,date\n";
+    analysisResult.categories.forEach(category => {
+      category.comments.forEach(comment => {
+        const row = [
+          `"${category.name.replace(/"/g, '""')}"`,
+          `"${comment.author.replace(/"/g, '""')}"`,
+          `"${comment.text.replace(/"/g, '""').replace(/\r?\n|\r/g, ' ')}"`,
+          comment.likeCount,
+          comment.replyCount,
+          comment.publishedAt,
+        ].join(',');
+        csvContent += row + "\n";
+      });
     });
-    return csv;
+
+    const dataStr = "data:text/csv;charset=utf-8," + encodeURIComponent(csvContent);
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "comment_analysis.csv");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
   };
 
-  const handleExportCsv = () => {
-    const csvString = `data:text/csv;charset=utf-8,${encodeURIComponent(convertToCSV())}`;
-    const link = document.createElement('a');
-    link.href = csvString;
-    link.download = 'comment-analysis.csv';
-    link.click();
-  };
-
+  if (!analysisResult) {
+    return null;
+  }
 
   return (
-    <div className="mt-6 border-t border-gray-700 pt-4 flex justify-end gap-4">
-      <button
-        onClick={handleExportJson}
-        className="flex items-center bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md"
-      >
-        <ArrowDownTrayIcon className="mr-2" />
+    <div className="mt-6 flex items-center gap-4">
+      <h4 className="text-md font-bold">Export Results:</h4>
+      <button onClick={downloadJSON} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md text-sm">
         Export as JSON
       </button>
-      <button
-        onClick={handleExportCsv}
-        className="flex items-center bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md"
-      >
-        <ArrowDownTrayIcon className="mr-2" />
+      <button onClick={downloadCSV} className="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-md text-sm">
         Export as CSV
       </button>
     </div>

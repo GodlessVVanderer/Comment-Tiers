@@ -1,25 +1,23 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { resolve } from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: 'dist',
     rollupOptions: {
       input: {
-        background: 'src/background.ts',
-        content: 'src/content.tsx',
-        options: 'src/options.html',
-        popup: 'src/index.html',
+        popup: resolve(__dirname, 'index.html'),
+        options: resolve(__dirname, 'options.html'),
+        content: resolve(__dirname, 'src/content.tsx'),
+        background: resolve(__dirname, 'src/background.ts'),
       },
       output: {
-        format: 'iife',
-        entryFileNames: '[name].js',
-        chunkFileNames: 'chunks/[name].js',
+        entryFileNames: 'assets/[name].js',
+        chunkFileNames: 'assets/[name].js',
         assetFileNames: 'assets/[name].[ext]',
       },
     },
-    minify: false, // Set to true for production builds
   },
 });

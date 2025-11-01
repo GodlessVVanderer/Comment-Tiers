@@ -1,86 +1,52 @@
-// FIX: Implement Zustand store for state management.
 import { create } from 'zustand';
-import { persist, createJSONStorage, StateStorage } from 'zustand/middleware';
-import { AppError, AppStatus, AnalysisResults, Progress, LiveSessionState, Comment, Category, TranscriptionTurn, LiveSessionStatus } from './types';
-import * as youtubeService from './services/youtubeService';
-import * as geminiService from './services/geminiService';
-import * as liveService from './services/liveService';
-import { COMMENT_CATEGORIES, DEFAULT_COMMENT_LIMIT } from './constants';
-import { batch } from './utils';
-
-// This declaration is needed because the chrome types might not be available in all contexts
-declare const chrome: any;
+import { persist, createJSONStorage } from 'zustand/middleware';
+import {
+  AppStatus,
+  AnalysisResult,
+  Progress,
+  YouTubeComment,
+  LiveSessionStatus,
+  TranscriptionTurn
+} from './types';
+import { fetchComments } from './services/youtubeService';
+import { analyzeComments } from './services/geminiService';
+import { startSession, stopSession } from './services/liveService';
 
 interface AppState {
-  youtubeApiKey: string | null;
-  geminiApiKey: string | null;
+  youtubeApiKey: string;
+  geminiApiKey: string;
   status: AppStatus;
   progress: Progress;
-  results: AnalysisResults | null;
-  error: AppError | null;
-  configError: string | null;
-  commentLimit: number;
-  liveSession: LiveSessionState;
-  isPricingModalOpen: boolean;
-
+  analysisResult: AnalysisResult | null;
+  error: string | null;
+  liveSession: {
+    status: LiveSessionStatus;
+    transcription: TranscriptionTurn[];
+    error: string | null;
+  };
   actions: {
     setYoutubeApiKey: (key: string) => void;
     setGeminiApiKey: (key: string) => void;
-    setCommentLimit: (limit: number) => void;
-    validateKeys: () => Promise<void>;
-    analyze: () => Promise<void>;
+    startAnalysis: (videoId: string, commentLimit: number) => Promise<void>;
     reset: () => void;
-    addReply: (categoryName: string, commentId: string, text: string) => void;
-    editComment: (categoryName: string, commentId: string, text: string, replyId?: string) => void;
-    loadMoreReplies: (categoryName: string, commentId: string) => void;
-    startLiveSession: () => Promise<void>;
+    startLiveSession: () => void;
     stopLiveSession: () => void;
-    togglePricingModal: () => void;
   };
 }
 
 const initialState = {
-  youtubeApiKey: null,
-  geminiApiKey: null,
-  status: 'configuring' as AppStatus,
-  progress: { phase: 'fetching', percent: 0 } as Progress,
-  results: null,
+  youtubeApiKey: '',
+  geminiApiKey: '',
+  status: 'idle' as AppStatus,
+  progress: { value: 0, text: '' },
+  analysisResult: null,
   error: null,
-  configError: null,
-  commentLimit: DEFAULT_COMMENT_LIMIT,
-  isPricingModalOpen: false,
   liveSession: {
-    status: 'idle',
+    status: 'idle' as LiveSessionStatus,
     transcription: [],
     error: null,
-  } as LiveSessionState,
+  },
 };
-
-// Wrapper for chrome.storage.sync to conform to Zustand's StateStorage interface
-const chromeStorageSync: StateStorage = {
-    getItem: (name: string): Promise<string | null> => {
-        return new Promise((resolve) => {
-            chrome.storage.sync.get([name], (result: { [key: string]: any; }) => {
-                resolve(result[name] ?? null);
-            });
-        });
-    },
-    setItem: (name: string, value: string): Promise<void> => {
-        return new Promise((resolve) => {
-            chrome.storage.sync.set({ [name]: value }, () => {
-                resolve();
-            });
-        });
-    },
-    removeItem: (name: string): Promise<void> => {
-        return new Promise((resolve) => {
-            chrome.storage.sync.remove(name, () => {
-                resolve();
-            });
-        });
-    },
-};
-
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -89,152 +55,106 @@ export const useAppStore = create<AppState>()(
       actions: {
         setYoutubeApiKey: (key) => set({ youtubeApiKey: key }),
         setGeminiApiKey: (key) => set({ geminiApiKey: key }),
-        setCommentLimit: (limit) => set({ commentLimit: limit }),
-        togglePricingModal: () => set(state => ({ isPricingModalOpen: !state.isPricingModalOpen })),
-        
-        validateKeys: async () => {
+        reset: () => set({ status: 'idle', progress: { value: 0, text: '' }, error: null, analysisResult: null, liveSession: { ...initialState.liveSession, transcription: [] } }),
+        startAnalysis: async (videoId, commentLimit) => {
           const { youtubeApiKey, geminiApiKey } = get();
           if (!youtubeApiKey || !geminiApiKey) {
-            set({ status: 'config-error', configError: 'Both YouTube and Gemini API keys are required.' });
-            return;
-          }
-          set({ status: 'idle', configError: null });
-        },
-
-        analyze: async () => {
-          const { youtubeApiKey, geminiApiKey, commentLimit } = get();
-          await get().actions.validateKeys();
-          if (get().status === 'config-error' || !youtubeApiKey || !geminiApiKey) {
+            set({ status: 'config-error', error: 'API keys are not set.' });
             return;
           }
 
-          set({ status: 'loading', progress: { phase: 'fetching', percent: 0 }, error: null, results: null });
+          set({ status: 'loading', progress: { value: 0, text: 'Starting analysis...' }, error: null, analysisResult: null });
 
           try {
-            // 1. Fetch comments
-            const videoId = youtubeService.getVideoIdFromUrl();
-            if (!videoId) throw new Error("Could not find YouTube video ID on this page.");
+            const comments: YouTubeComment[] = await fetchComments(
+              videoId,
+              youtubeApiKey,
+              commentLimit,
+              (progress) => {
+                set({ progress: { value: progress.value, text: `Fetching comments: ${progress.fetched}/${progress.total}...` } });
+              }
+            );
             
-            const allComments = await youtubeService.fetchAllComments(youtubeApiKey, videoId, commentLimit, (progress: { percent: number, processed: number, total: number }) => {
-              set({ progress: { ...progress, phase: 'fetching' } });
-            });
-
-            // 2. Filter comments (basic)
-            set({ status: 'loading', progress: { phase: 'filtering', percent: 0 } });
-            const filteredComments = allComments.filter(c => c.text.length > 10 && !c.text.toLowerCase().includes('sub'));
-            
-            const stats = {
-              totalComments: allComments.length,
-              filteredComments: allComments.length - filteredComments.length,
-              analyzedComments: filteredComments.length
-            };
-            
-            // 3. Analyze comments
-            set({ status: 'loading', progress: { phase: 'analyzing', percent: 0, processed: 0, total: filteredComments.length } });
-            
-            const commentMap = new Map(filteredComments.map(c => [c.id, c]));
-            const commentBatches = batch(filteredComments, 50);
-            const categorizedIds: Record<string, string[]> = {};
-            COMMENT_CATEGORIES.forEach(c => categorizedIds[c.name] = []);
-            
-            let processedCount = 0;
-            for (const currentBatch of commentBatches) {
-              const result = await geminiService.analyzeCommentBatch(geminiApiKey, currentBatch);
-              result.forEach(item => {
-                if(categorizedIds[item.category]) {
-                    categorizedIds[item.category].push(...item.comment_ids);
-                }
-              });
-              processedCount += currentBatch.length;
-              set({ progress: { phase: 'analyzing', percent: (processedCount / filteredComments.length) * 100, processed: processedCount, total: filteredComments.length } });
-            }
-            
-            const categories: Category[] = COMMENT_CATEGORIES.map(c => ({
-              category: c.name,
-              summary: '',
-              comments: (categorizedIds[c.name] || []).map(id => commentMap.get(id)).filter((c): c is Comment => !!c)
-            })).filter(c => c.comments.length > 0);
-
-            // 4. Summarize categories
-            set({ status: 'loading', progress: { phase: 'summarizing', percent: 0, processed: 0, total: categories.length } });
-            
-            for(let i=0; i<categories.length; i++) {
-                if (categories[i].comments.length > 0) {
-                    const summary = await geminiService.summarizeCategory(geminiApiKey, categories[i]);
-                    categories[i].summary = summary;
-                }
-                set({ progress: { phase: 'summarizing', percent: ((i+1) / categories.length) * 100, processed: i+1, total: categories.length } });
+            if (comments.length === 0) {
+              set({ status: 'error', error: 'No comments found for this video.' });
+              return;
             }
 
-            set({ status: 'results', results: { stats, categories } });
+            set({ progress: { value: 50, text: `Analyzing ${comments.length} comments...` } });
+
+            const result = await analyzeComments(
+              comments,
+              geminiApiKey,
+              (progress) => {
+                const baseProgress = 50;
+                set({ progress: { value: baseProgress + (progress.processed / progress.total) * 50, text: `Analyzing... (${progress.processed}/${progress.total})`, eta: progress.eta } });
+              }
+            );
+            
+            set({ status: 'results', analysisResult: result, progress: { value: 100, text: 'Analysis complete' } });
+
           } catch (error: any) {
             console.error(error);
-            set({ status: 'error', error: { code: error.cause || 'UNKNOWN', message: error.message } });
+            const errorMessage = error.message || 'An unknown error occurred.';
+            set({ status: 'error', error: `Analysis failed: ${errorMessage}` });
           }
         },
-
-        reset: () => {
-          const { youtubeApiKey, geminiApiKey, commentLimit } = get();
-          set({ ...initialState, status: 'idle', youtubeApiKey, geminiApiKey, commentLimit });
-          get().actions.validateKeys();
-        },
-
-        addReply: (categoryName, commentId, text) => {},
-        editComment: (categoryName, commentId, text, replyId) => {},
-        loadMoreReplies: async (categoryName, commentId) => {
-            // NOTE: Full implementation requires OAuth2, which is beyond the scope of API key auth.
-            console.log(`Loading more replies for ${commentId} in ${categoryName}`);
-        },
-
-        startLiveSession: async () => {
+        startLiveSession: () => {
           const { geminiApiKey } = get();
           if (!geminiApiKey) {
-            set({ liveSession: { ...get().liveSession, error: "Gemini API Key not set." } });
+            set(state => ({
+              liveSession: { ...state.liveSession, status: 'idle', error: 'Gemini API key is not set.' },
+            }));
             return;
           }
-          set(state => ({ liveSession: { ...state.liveSession, status: 'loading', error: null, transcription: [] } }));
-          try {
-            await liveService.startSession(geminiApiKey, {
-              onTranscriptionUpdate: (turn) => {
-                set(state => {
-                    const newTranscription = [...state.liveSession.transcription];
-                    const lastTurn = newTranscription[newTranscription.length - 1];
-                    if (lastTurn && lastTurn.speaker === turn.speaker) {
-                        lastTurn.text = turn.text;
-                    } else if (turn.text.trim()) {
-                        newTranscription.push(turn);
-                    }
-                    return { liveSession: { ...state.liveSession, transcription: newTranscription } };
-                });
-              },
-              onStatusUpdate: (status: LiveSessionStatus) => set(state => ({ liveSession: { ...state.liveSession, status }})),
-              onError: (error: string) => set(state => ({ liveSession: { ...state.liveSession, status: 'idle', error }})),
-            });
-          } catch(e: any) {
-             set(state => ({ liveSession: { ...state.liveSession, status: 'idle', error: e.message }}));
-          }
+
+          set(state => ({
+            liveSession: { ...state.liveSession, status: 'loading', error: null, transcription: [] },
+          }));
+
+          startSession(geminiApiKey, {
+            onStatusUpdate: (status) => {
+              set(state => ({ liveSession: { ...state.liveSession, status } }));
+            },
+            onTranscriptionUpdate: (turn) => {
+               set(state => {
+                 const newTranscription = [...state.liveSession.transcription];
+                 const lastTurn = newTranscription[newTranscription.length - 1];
+                 if (lastTurn && lastTurn.speaker === turn.speaker && !lastTurn.isFinal) {
+                   lastTurn.text = turn.text;
+                   lastTurn.isFinal = turn.isFinal;
+                 } else {
+                   // find if we are updating a previous non-final turn
+                   const existingTurnIndex = newTranscription.findIndex(t => t.speaker === turn.speaker && !t.isFinal);
+                   if (existingTurnIndex !== -1) {
+                      newTranscription[existingTurnIndex] = { ...newTranscription[existingTurnIndex], text: turn.text, isFinal: turn.isFinal };
+                   } else {
+                      newTranscription.push(turn);
+                   }
+                 }
+                 return { liveSession: { ...state.liveSession, transcription: newTranscription.filter(t => t.text) } };
+               });
+            },
+            onError: (error) => {
+              set(state => ({
+                liveSession: { ...state.liveSession, status: 'idle', error },
+              }));
+            },
+          });
         },
         stopLiveSession: () => {
-          liveService.stopSession();
-          set((state) => ({
-            liveSession: {
-              ...state.liveSession,
-              status: 'idle',
-              transcription: [],
-              error: null,
-            },
+          stopSession();
+          set(state => ({
+            liveSession: { ...state.liveSession, status: 'idle' },
           }));
         },
       },
     }),
     {
       name: 'youtube-comment-analyzer-storage',
-      storage: createJSONStorage(() => chromeStorageSync),
-      partialize: (state) => ({
-        youtubeApiKey: state.youtubeApiKey,
-        geminiApiKey: state.geminiApiKey,
-        commentLimit: state.commentLimit,
-      }),
+      // @ts-ignore
+      storage: createJSONStorage(() => chrome.storage.local),
+      partialize: (state) => ({ youtubeApiKey: state.youtubeApiKey, geminiApiKey: state.geminiApiKey }),
     }
   )
 );

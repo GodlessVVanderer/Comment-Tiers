@@ -1,56 +1,26 @@
-declare const chrome: any;
-
 import React from 'react';
-// FIX: Use relative path for module import.
 import { useAppStore } from '../../store';
 
-const ErrorPanel = () => {
-  const { error, actions } = useAppStore();
+interface ErrorPanelProps {
+  error?: string;
+  onRetry?: () => void;
+}
 
-  if (!error) return null;
-
-  const getErrorMessage = () => {
-    switch (error.code) {
-      case 'YOUTUBE_API_KEY':
-        return "There's an issue with your YouTube API Key. It might be invalid, expired, or have exceeded its quota. Please check your key in the extension settings.";
-      case 'GEMINI_API_KEY':
-        return "There's an issue with your Gemini API Key. It might be invalid or your billing account may have issues. Please check your key in the extension settings.";
-      case 'GEMINI_API_FAILURE':
-        return `An error occurred while communicating with the Gemini API: ${error.message}`;
-      default:
-        return `An unexpected error occurred: ${error.message}`;
-    }
-  };
-  
-  const handleOpenSettings = () => {
-    if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage({ action: 'openOptionsPage' });
-    }
-  };
-
+const ErrorPanel: React.FC<ErrorPanelProps> = ({ error: propError, onRetry: propOnRetry }) => {
+  const { error: storeError, actions } = useAppStore();
+  const error = propError || storeError || 'An unknown error occurred.';
+  const onRetry = propOnRetry || (() => actions.reset());
 
   return (
-    <div className="text-center p-4 bg-red-900 bg-opacity-50 border border-red-700 rounded-md">
-      <h3 className="text-lg font-bold text-red-300">Analysis Failed</h3>
-      <p className="text-red-400 my-2">
-        {getErrorMessage()}
-      </p>
-      <div className="flex justify-center gap-4 mt-4">
-        <button
-          onClick={actions.reset}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md"
-        >
-          Try Again
-        </button>
-        {(error.code === 'YOUTUBE_API_KEY' || error.code === 'GEMINI_API_KEY') && (
-            <button
-                onClick={handleOpenSettings}
-                className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-md"
-            >
-                Open Settings
-            </button>
-        )}
-      </div>
+    <div className="text-center p-8 bg-red-900 bg-opacity-30 rounded-lg">
+      <h2 className="text-xl font-bold text-red-400 mb-2">Analysis Failed</h2>
+      <p className="text-red-300 mb-6">{error}</p>
+      <button
+        onClick={onRetry}
+        className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md"
+      >
+        Try Again
+      </button>
     </div>
   );
 };
