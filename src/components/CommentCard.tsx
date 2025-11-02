@@ -1,27 +1,46 @@
 import React from 'react';
-import { YouTubeComment } from '../types';
+import { Comment } from '../types';
+import { ThumbsUpIcon } from './Icons';
+import { formatNumber } from '../utils';
 
 interface CommentCardProps {
-  comment: YouTubeComment;
+    comment: Comment;
+    videoId: string;
+    depth: number;
 }
 
-const CommentCard: React.FC<CommentCardProps> = ({ comment }) => {
-  return (
-    <div className="p-3 bg-gray-800 rounded-lg flex items-start gap-4">
-      <img src={comment.authorProfileImageUrl} alt={comment.author} className="w-10 h-10 rounded-full" />
-      <div className="flex-1">
-        <div className="flex items-center gap-2 text-sm">
-          <span className="font-bold">{comment.author}</span>
-          <span className="text-gray-400">{new Date(comment.publishedAt).toLocaleDateString()}</span>
+const CommentCard: React.FC<CommentCardProps> = ({ comment, videoId, depth }) => {
+    // FIX: Create a link to the specific comment.
+    const commentUrl = `https://www.youtube.com/watch?v=${videoId}&lc=${comment.id}`;
+
+    return (
+        <div className={`flex items-start space-x-3 p-2 rounded-lg ${depth > 0 ? 'ml-4 mt-2 bg-gray-50' : ''}`}>
+            <img 
+                src={comment.authorProfileImageUrl} 
+                alt={comment.author} 
+                className="w-8 h-8 rounded-full"
+            />
+            <div className="flex-1">
+                <div className="flex items-center space-x-2">
+                    <a href={comment.authorChannelUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-gray-700 hover:underline">
+                        {comment.author}
+                    </a>
+                    <a href={commentUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-500 hover:underline">
+                        {new Date(comment.publishedAt).toLocaleDateString()}
+                    </a>
+                </div>
+                <p className="text-sm text-gray-800 mt-1">{comment.text}</p>
+                <div className="flex items-center space-x-2 text-gray-500 mt-2">
+                    <ThumbsUpIcon />
+                    <span className="text-xs">{formatNumber(comment.likeCount)}</span>
+                </div>
+                {/* Recursively render replies */}
+                {comment.replies && comment.replies.map(reply => (
+                    <CommentCard key={reply.id} comment={reply} videoId={videoId} depth={depth + 1} />
+                ))}
+            </div>
         </div>
-        <p className="text-sm mt-1 whitespace-pre-wrap">{comment.text}</p>
-        <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-          <span>Likes: {comment.likeCount}</span>
-          <span>Replies: {comment.replyCount}</span>
-        </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default CommentCard;

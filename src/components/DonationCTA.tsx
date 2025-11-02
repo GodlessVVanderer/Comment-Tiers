@@ -1,30 +1,10 @@
 import React from 'react';
-import { HeartIcon, CoffeeIcon } from './Icons';
 
-const DonationCTA: React.FC = () => {
+const DonationCTA = () => {
   return (
-    <div className="mt-6 p-4 bg-gray-900 rounded-lg text-center">
-      <p className="text-sm text-gray-400">
-        Enjoying this tool? Consider supporting its development!
-      </p>
-      <div className="flex justify-center gap-4 mt-2">
-        <a
-          href="https://github.com/sponsors/YOUR_USERNAME" // Replace with your link
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center text-sm text-pink-400 hover:text-pink-300"
-        >
-          <HeartIcon className="mr-1" /> Sponsor on GitHub
-        </a>
-        <a
-          href="https://www.buymeacoffee.com/YOUR_USERNAME" // Replace with your link
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center text-sm text-yellow-400 hover:text-yellow-300"
-        >
-          <CoffeeIcon className="mr-1" /> Buy Me a Coffee
-        </a>
-      </div>
+    <div className="text-center p-2 bg-gray-50 rounded-lg mt-4">
+      <p className="text-sm">If you find this tool useful, please consider supporting its development.</p>
+      <button className="text-sm px-3 py-1 bg-blue-500 text-white rounded mt-2 hover:bg-blue-600">Donate</button>
     </div>
   );
 };

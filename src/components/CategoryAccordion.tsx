@@ -1,42 +1,41 @@
 import React, { useState } from 'react';
-import { CommentCategory } from '../types';
+// FIX: Changed Category to Topic to match the data structure from the Gemini API analysis.
+import { Topic } from '../types';
 import CommentCard from './CommentCard';
-import { ChevronDownIcon } from './Icons';
+import { ChevronDownIcon, ChevronUpIcon } from './Icons';
 
 interface CategoryAccordionProps {
-  category: CommentCategory;
+    // FIX: Changed category prop to topic and added videoId to pass to child components.
+    topic: Topic;
+    videoId: string;
 }
 
-const CategoryAccordion: React.FC<CategoryAccordionProps> = ({ category }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const CategoryAccordion: React.FC<CategoryAccordionProps> = ({ topic, videoId }) => {
+    const [isOpen, setIsOpen] = useState(false);
 
-  if (category.count === 0) {
-    return null;
-  }
-
-  return (
-    <div className="border-b border-gray-700">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex justify-between items-center p-4 text-left hover:bg-gray-700"
-      >
-        <div>
-          <h3 className="text-lg font-bold">{category.name} ({category.count})</h3>
-          <p className="text-sm text-gray-400">{category.description}</p>
+    return (
+        <div className="border rounded-lg mb-2 bg-white shadow-sm">
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex justify-between items-center p-3 text-left hover:bg-gray-50"
+            >
+                <div>
+                    {/* FIX: Updated to use properties from the Topic type (title, comments.length, summary). */}
+                    <h3 className="font-semibold text-gray-800">{topic.title} ({topic.comments.length})</h3>
+                    {topic.summary && <p className="text-sm text-gray-500 italic mt-1">"{topic.summary}"</p>}
+                </div>
+                {isOpen ? <ChevronUpIcon /> : <ChevronDownIcon />}
+            </button>
+            {isOpen && (
+                <div className="p-3 border-t max-h-60 overflow-y-auto">
+                    {topic.comments.map(comment => (
+                        // FIX: Added missing videoId and depth props to CommentCard.
+                        <CommentCard key={comment.id} comment={comment} videoId={videoId} depth={0} />
+                    ))}
+                </div>
+            )}
         </div>
-        <ChevronDownIcon className={`transform transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-      {isOpen && (
-        <div className="p-4 bg-gray-900">
-          <div className="space-y-4 max-h-96 overflow-y-auto">
-            {category.comments.map(comment => (
-              <CommentCard key={comment.id} comment={comment} />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    );
 };
 
 export default CategoryAccordion;

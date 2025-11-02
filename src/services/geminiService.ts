@@ -1,86 +1,104 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { YouTubeComment, AnalysisResult, CommentCategory } from '../types';
-import { COMMENT_CATEGORIES } from '../constants';
-import { batch } from '../utils';
+import { AnalysisResult, Comment } from '../types';
 
-const BATCH_SIZE = 50; // Number of comments to process in a single API call
+const getResponseSchema = () => ({
+    type: Type.OBJECT,
+    properties: {
+        summary: {
+            type: Type.STRING,
+            description: "A high-level summary of all the comments provided."
+        },
+        sentiment: {
+            type: Type.OBJECT,
+            properties: {
+                positive: { type: Type.NUMBER, description: "Percentage of positive comments (0-100)." },
+                negative: { type: Type.NUMBER, description: "Percentage of negative comments (0-100)." },
+                neutral: { type: Type.NUMBER, description: "Percentage of neutral comments (0-100)." },
+            },
+            required: ["positive", "negative", "neutral"]
+        },
+        topics: {
+            type: Type.ARRAY,
+            description: "A list of key topics or themes discovered in the comments.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    title: { type: Type.STRING, description: "A short, descriptive title for the topic (e.g., 'Feature Requests', 'Positive Feedback')." },
+                    summary: { type: Type.STRING, description: "A one-sentence summary of the comments in this topic." },
+                    comment_ids: {
+                        type: Type.ARRAY,
+                        description: "A list of comment IDs that belong to this topic.",
+                        items: { type: Type.STRING }
+                    }
+                },
+                required: ["title", "summary", "comment_ids"]
+            }
+        }
+    },
+    required: ["summary", "sentiment", "topics"]
+});
 
-export const analyzeComments = async (
-  comments: YouTubeComment[],
-  apiKey: string,
-  onProgress: (progress: { processed: number; total: number; eta: number }) => void
-): Promise<AnalysisResult> => {
-  // FIX: Use new GoogleGenAI({apiKey})
-  const ai = new GoogleGenAI({ apiKey: apiKey });
+export const analyzeComments = async (comments: Comment[]): Promise<AnalysisResult> => {
+    if (!comments || comments.length === 0) {
+        return {
+            summary: "No comments to analyze.",
+            sentiment: { positive: 0, negative: 0, neutral: 0 },
+            topics: [],
+        };
+    }
+    
+    // FIX: Initialize GoogleGenAI with API key from process.env per guidelines
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
-  const categories: Record<string, CommentCategory> = {};
-  COMMENT_CATEGORIES.forEach(c => {
-    categories[c.name] = { ...c, comments: [], count: 0 };
-  });
+    const commentsText = comments.map(c => `Comment ID: ${c.id}\nText: ${c.text}`).join('\n\n');
 
-  const commentBatches = batch(comments, BATCH_SIZE);
-  let processedCount = 0;
-  const startTime = Date.now();
+    const prompt = `
+        Analyze the following YouTube comments and provide a detailed summary. I need the output in JSON format.
+        
+        Here is the data:
+        ${commentsText}
 
-  const systemInstruction = `You are an expert at analyzing YouTube comments. You will be given a batch of comments in JSON format. Your task is to categorize each comment into one of the following categories: ${COMMENT_CATEGORIES.map(c => `"${c.name}"`).join(', ')}. Your response must be a valid JSON array of objects, where each object has two keys: "id" (the original comment ID) and "category" (the assigned category name). Do not include any other text or explanation in your response.`;
-
-  for (const commentBatch of commentBatches) {
-    const prompt = `Please categorize the following comments:\n${JSON.stringify(
-      commentBatch.map(c => ({ id: c.id, text: c.text }))
-    )}`;
+        Please perform the following analysis:
+        1.  **Overall Summary:** A high-level summary of all the comments provided.
+        2.  **Sentiment Analysis:** Calculate the percentage of positive, negative, and neutral comments.
+        3.  **Topic Modeling:** Identify the main topics or themes being discussed. For each topic, provide a title, a one-sentence summary, and a list of the corresponding comment IDs. Create between 3 to 7 topics.
+    `;
 
     try {
-      // FIX: Use ai.models.generateContent
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          systemInstruction,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                category: { type: Type.STRING },
-              },
-              required: ['id', 'category'],
+        const response = await ai.models.generateContent({
+            // FIX: Use appropriate model for complex text tasks
+            model: "gemini-2.5-pro",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: getResponseSchema(),
             },
-          },
-        },
-      });
+        });
 
-      // FIX: Use response.text to get string output
-      const jsonText = response.text.trim();
-      const results: { id: string; category: string }[] = JSON.parse(jsonText);
+        // FIX: Extract text using .text property
+        const jsonString = response.text.trim();
+        const analysis = JSON.parse(jsonString);
 
-      results.forEach(result => {
-        const comment = comments.find(c => c.id === result.id);
-        if (comment && categories[result.category]) {
-          categories[result.category].comments.push(comment);
-          categories[result.category].count++;
+        // Map comment IDs back to full comment objects
+        const commentMap = new Map(comments.map(c => [c.id, c]));
+        const result: AnalysisResult = {
+            summary: analysis.summary,
+            sentiment: analysis.sentiment,
+            topics: analysis.topics.map((topic: any) => ({
+                title: topic.title,
+                summary: topic.summary,
+                comments: topic.comment_ids
+                    .map((id: string) => commentMap.get(id))
+                    .filter((c: Comment | undefined): c is Comment => c !== undefined),
+            })),
+        };
+
+        return result;
+    } catch (error) {
+        console.error("Error analyzing comments with Gemini:", error);
+        if (error instanceof SyntaxError) {
+             throw new Error("Failed to parse the response from the AI model. It was not valid JSON.");
         }
-      });
-    } catch (e) {
-      console.error('Error processing batch:', e);
-      // Skip batch on error to avoid halting entire process
+        throw new Error("Failed to analyze comments due to an API error.");
     }
-
-    processedCount += commentBatch.length;
-    const elapsedTime = (Date.now() - startTime) / 1000;
-    const commentsPerSecond = processedCount / elapsedTime;
-    const remainingComments = comments.length - processedCount;
-    const eta = commentsPerSecond > 0 ? Math.round(remainingComments / commentsPerSecond) : -1;
-    
-    onProgress({ processed: processedCount, total: comments.length, eta });
-  }
-
-  const sortedCategories = Object.values(categories).sort((a, b) => b.count - a.count);
-
-  return {
-    totalComments: comments.length,
-    analyzedComments: processedCount,
-    categories: sortedCategories,
-  };
 };

@@ -15,15 +15,14 @@ export function categorizeComments(comments: string[], clusters = 5) {
   const vectorized = comments.map(c => c.length);
   
   // K-Means clustering expects an array of feature vectors (e.g., [[v1], [v2], ...])
-  // Using 'as any' here to bypass potential strict type mismatches with the library
-  // FIX: Add an empty options object as the third argument to satisfy the function signature.
-  const result = kmeans(vectorized.map(v => [v]), clusters, {}) as any;
+  // FIX: Removed obsolete comments and unnecessary type assertions to rely on type inference for cleaner, more type-safe code.
+  const result = kmeans(vectorized.map(v => [v]), clusters, {});
   
   const categoryMap: Record<number, string[]> = {};
   
   // Map the comment texts back to their cluster index
   if (result?.clusters && Array.isArray(result.clusters)) {
-    (result.clusters as number[]).forEach((clusterIndex: number, commentIndex: number) => {
+    result.clusters.forEach((clusterIndex, commentIndex) => {
       if (commentIndex >= comments.length) return;
       if (!categoryMap[clusterIndex]) categoryMap[clusterIndex] = [];
       categoryMap[clusterIndex].push(comments[commentIndex]);

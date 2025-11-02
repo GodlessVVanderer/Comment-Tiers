@@ -1,111 +1,83 @@
-import React, { useEffect, useState } from 'react';
+/// <reference types="chrome" />
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { useAppStore } from './store';
 import GeminiApiKeyHelpModal from './components/GeminiApiKeyHelpModal';
-import './style.css'; // Ensure tailwind styles are applied
+import YouTubeApiKeyHelpModal from './components/YouTubeApiKeyHelpModal';
+import './index.css';
 
 const Options: React.FC = () => {
-  const { youtubeApiKey, geminiApiKey, actions } = useAppStore();
-  const [localYoutubeKey, setLocalYoutubeKey] = useState('');
-  const [localGeminiKey, setLocalGeminiKey] = useState('');
-  const [isGeminiHelpVisible, setGeminiHelpVisible] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
+    const [youtubeApiKey, setYoutubeApiKey] = useState('');
+    const [status, setStatus] = useState('');
+    const [isGeminiHelpOpen, setIsGeminiHelpOpen] = useState(false);
+    const [isYouTubeHelpOpen, setIsYouTubeHelpOpen] = useState(false);
 
-  useEffect(() => {
-    // zustand persistence might take a moment to rehydrate
-    const unsubscribe = useAppStore.persist.onFinishHydration(() => {
-        const state = useAppStore.getState();
-        setLocalYoutubeKey(state.youtubeApiKey);
-        setLocalGeminiKey(state.geminiApiKey);
-        setIsInitialized(true);
-    });
+    useEffect(() => {
+        // Load keys from storage
+        chrome.storage.sync.get(['youtubeApiKey'], (result) => {
+            if (result.youtubeApiKey) {
+                setYoutubeApiKey(result.youtubeApiKey);
+            }
+        });
+    }, []);
 
-    // If already hydrated, set state immediately
-    if (useAppStore.persist.hasHydrated()) {
-        const state = useAppStore.getState();
-        setLocalYoutubeKey(state.youtubeApiKey);
-        setLocalGeminiKey(state.geminiApiKey);
-        setIsInitialized(true);
-    }
-    
-    return () => {
-        unsubscribe();
-    }
-  }, []);
+    const saveKeys = () => {
+        // Note: The Gemini API key is not saved here, as per guidelines to use process.env.
+        chrome.storage.sync.set({ youtubeApiKey }, () => {
+            setStatus('Settings saved!');
+            setTimeout(() => setStatus(''), 2000);
+        });
+    };
 
+    return (
+        <div className="p-8 max-w-lg mx-auto font-sans">
+            <h1 className="text-2xl font-bold mb-6">Settings</h1>
+            
+            <div className="space-y-6">
+                <div>
+                    <label htmlFor="youtube-key" className="block text-sm font-medium text-gray-700 mb-1">
+                        YouTube Data API Key
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <input
+                            id="youtube-key"
+                            type="password"
+                            value={youtubeApiKey}
+                            onChange={(e) => setYoutubeApiKey(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Enter your YouTube API Key"
+                        />
+                         <button onClick={() => setIsYouTubeHelpOpen(true)} className="text-sm text-blue-600 hover:underline">Help</button>
+                    </div>
+                </div>
 
-  const handleSave = () => {
-    actions.setYoutubeApiKey(localYoutubeKey);
-    actions.setGeminiApiKey(localGeminiKey);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                     <h4 className="font-semibold text-blue-800">Google Gemini API Key</h4>
+                     <p className="text-sm text-blue-700 mt-1">
+                         The Gemini API key is configured at build time and does not need to be set here. For more information on acquiring a key,{' '}
+                         <button onClick={() => setIsGeminiHelpOpen(true)} className="font-semibold text-blue-600 hover:underline">click here</button>.
+                     </p>
+                </div>
 
-  if (!isInitialized) {
-    return <div className="min-h-screen bg-gray-900 text-gray-300 flex items-center justify-center">Loading...</div>;
-  }
+                <div className="flex items-center justify-between">
+                    <button
+                        onClick={saveKeys}
+                        className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700"
+                    >
+                        Save
+                    </button>
+                    {status && <p className="text-green-600">{status}</p>}
+                </div>
+            </div>
 
-  return (
-    <div className="min-h-screen bg-gray-900 text-gray-300 font-sans p-8">
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-6">Settings</h1>
-        <div className="bg-gray-800 p-6 rounded-lg shadow-md space-y-6">
-          <div>
-            <label htmlFor="youtube-key" className="block text-sm font-medium text-gray-400 mb-1">
-              YouTube Data API v3 Key
-            </label>
-            <input
-              type="password"
-              id="youtube-key"
-              value={localYoutubeKey}
-              onChange={(e) => setLocalYoutubeKey(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-white focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter your YouTube API Key"
-            />
-             <p className="text-xs text-gray-500 mt-1">
-                Required to fetch comments. See{' '}
-                <a href="https://developers.google.com/youtube/v3/getting-started" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
-                    how to get a key
-                </a>.
-            </p>
-          </div>
-          <div>
-            <label htmlFor="gemini-key" className="block text-sm font-medium text-gray-400 mb-1">
-              Google Gemini API Key
-            </label>
-            <input
-              type="password"
-              id="gemini-key"
-              value={localGeminiKey}
-              onChange={(e) => setLocalGeminiKey(e.target.value)}
-              className="w-full bg-gray-900 border border-gray-700 rounded-md px-3 py-2 text-white focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter your Gemini API Key"
-            />
-            <button onClick={() => setGeminiHelpVisible(true)} className="text-xs text-blue-400 hover:underline mt-1">
-              How do I get this?
-            </button>
-          </div>
-          <div className="flex justify-end">
-            <button
-              onClick={handleSave}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition-colors"
-            >
-              {saved ? 'Saved!' : 'Save Settings'}
-            </button>
-          </div>
+            <GeminiApiKeyHelpModal isOpen={isGeminiHelpOpen} onClose={() => setIsGeminiHelpOpen(false)} />
+            <YouTubeApiKeyHelpModal isOpen={isYouTubeHelpOpen} onClose={() => setIsYouTubeHelpOpen(false)} />
         </div>
-      </div>
-      {isGeminiHelpVisible && <GeminiApiKeyHelpModal onClose={() => setGeminiHelpVisible(false)} />}
-    </div>
-  );
+    );
 };
 
-const root = document.getElementById('root');
-if (root) {
-    ReactDOM.createRoot(root).render(
-      <React.StrictMode>
+const root = ReactDOM.createRoot(document.getElementById('root')!);
+root.render(
+    <React.StrictMode>
         <Options />
-      </React.StrictMode>
-    );
-}
+    </React.StrictMode>
+);

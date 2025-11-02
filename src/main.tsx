@@ -1,4 +1,15 @@
-// This file is not used in the current setup.
-// src/content.tsx is the entry point for the content script.
-// src/index.tsx is the entry point for the popup.
-// src/options.tsx is the entry point for the options page.
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+const rootElement = document.getElementById('root');
+if (rootElement) {
+  ReactDOM.createRoot(rootElement).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+} else {
+  console.error("Failed to find the root element");
+}

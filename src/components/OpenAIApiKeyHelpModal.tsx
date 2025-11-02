@@ -1,5 +1,6 @@
-// This is a placeholder. A full implementation would be similar to GeminiApiKeyHelpModal.tsx
 import React from 'react';
 
-const OpenAIApiKeyHelpModal = () => null;
+// This is a placeholder component.
+const OpenAIApiKeyHelpModal: React.FC = () => null;
+
 export default OpenAIApiKeyHelpModal;

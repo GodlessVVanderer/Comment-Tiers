@@ -1,72 +1,99 @@
-import { YouTubeComment } from '../types';
-import { YOUTUBE_API_BASE_URL } from '../constants';
+/// <reference types="chrome" />
+import { Comment, VideoDetails } from "../types";
 
-const MAX_RESULTS_PER_PAGE = 100;
+const YOUTUBE_API_BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
-export const fetchComments = async (
-  videoId: string,
-  apiKey: string,
-  limit: number,
-  onProgress: (progress: { fetched: number; total: number | 'unknown'; value: number }) => void
-): Promise<YouTubeComment[]> => {
-  let comments: YouTubeComment[] = [];
-  let nextPageToken: string | undefined = undefined;
+// Helper to fetch API key from storage
+const getYouTubeApiKey = async (): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        chrome.storage.sync.get(['youtubeApiKey'], (result) => {
+            if (chrome.runtime.lastError) {
+                return reject(chrome.runtime.lastError);
+            }
+            if (result.youtubeApiKey) {
+                resolve(result.youtubeApiKey);
+            } else {
+                reject(new Error("YouTube API key not found in storage."));
+            }
+        });
+    });
+}
 
-  onProgress({ fetched: 0, total: limit, value: 0 });
-  
-  try {
-    // First call to get total comment count info
-    const initialUrl = `${YOUTUBE_API_BASE_URL}/commentThreads?part=snippet,replies&videoId=${videoId}&key=${apiKey}&maxResults=${MAX_RESULTS_PER_PAGE}&order=relevance`;
-    const initialResponse = await fetch(initialUrl);
-    
-    if (!initialResponse.ok) {
-        const errorData = await initialResponse.json();
-        throw new Error(errorData.error.message || `HTTP error! status: ${initialResponse.status}`);
+export const getVideoDetails = async (videoId: string): Promise<VideoDetails> => {
+    const apiKey = await getYouTubeApiKey();
+    const url = `${YOUTUBE_API_BASE_URL}/videos?id=${videoId}&key=${apiKey}&part=snippet,statistics`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error("Failed to fetch video details from YouTube API.");
+    }
+    const data = await response.json();
+
+    if (!data.items || data.items.length === 0) {
+        throw new Error("Video not found.");
     }
 
-    const initialData = await initialResponse.json();
+    const item = data.items[0];
+    return {
+        id: item.id,
+        title: item.snippet.title,
+        author: item.snippet.channelTitle,
+        thumbnailUrl: item.snippet.thumbnails.default.url,
+        viewCount: parseInt(item.statistics.viewCount, 10),
+        likeCount: parseInt(item.statistics.likeCount, 10),
+        commentCount: parseInt(item.statistics.commentCount, 10),
+    };
+};
 
-    const totalResults = initialData.pageInfo?.totalResults ?? limit;
-    const totalToFetch = Math.min(totalResults, limit);
+// Fetches all comment threads for a video
+export const getAllComments = async (videoId: string): Promise<Comment[]> => {
+    const apiKey = await getYouTubeApiKey();
+    let comments: Comment[] = [];
+    let nextPageToken: string | undefined = undefined;
 
-    let currentData = initialData;
+    do {
+        const url = `${YOUTUBE_API_BASE_URL}/commentThreads?videoId=${videoId}&key=${apiKey}&part=snippet,replies&maxResults=100` +
+                    (nextPageToken ? `&pageToken=${nextPageToken}` : '');
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            const errorData = await response.json();
+            const message = errorData?.error?.message || "Failed to fetch comments from YouTube API.";
+            throw new Error(message);
+        }
+        const data = await response.json();
 
-    while (comments.length < limit) {
-      const fetchedComments = currentData.items?.map((item: any) => {
-        const snippet = item.snippet.topLevelComment.snippet;
-        return {
-          id: item.snippet.topLevelComment.id,
-          text: snippet.textDisplay,
-          author: snippet.authorDisplayName,
-          authorProfileImageUrl: snippet.authorProfileImageUrl,
-          likeCount: snippet.likeCount,
-          replyCount: item.snippet.totalReplyCount,
-          publishedAt: snippet.publishedAt,
-        };
-      }) || [];
+        const pageComments = data.items.map((item: any) => {
+            const topLevelComment = item.snippet.topLevelComment;
+            const comment: Comment = {
+                id: topLevelComment.id,
+                text: topLevelComment.snippet.textDisplay,
+                author: topLevelComment.snippet.authorDisplayName,
+                authorProfileImageUrl: topLevelComment.snippet.authorProfileImageUrl,
+                authorChannelUrl: topLevelComment.snippet.authorChannelUrl,
+                likeCount: topLevelComment.snippet.likeCount,
+                publishedAt: topLevelComment.snippet.publishedAt,
+                replies: [],
+            };
 
-      comments = comments.concat(fetchedComments);
-      nextPageToken = currentData.nextPageToken;
-      
-      const progressValue = Math.min(Math.round((comments.length / totalToFetch) * 50), 50);
-      onProgress({ fetched: comments.length, total: totalToFetch, value: progressValue });
+            if (item.replies) {
+                comment.replies = item.replies.comments.map((reply: any) => ({
+                    id: reply.id,
+                    text: reply.snippet.textDisplay,
+                    author: reply.snippet.authorDisplayName,
+                    authorProfileImageUrl: reply.snippet.authorProfileImageUrl,
+                    authorChannelUrl: reply.snippet.authorChannelUrl,
+                    likeCount: reply.snippet.likeCount,
+                    publishedAt: reply.snippet.publishedAt,
+                }));
+            }
+            return comment;
+        });
 
-      if (!nextPageToken || comments.length >= limit) {
-        break;
-      }
+        comments = comments.concat(pageComments);
+        nextPageToken = data.nextPageToken;
 
-      const nextUrl = `${YOUTUBE_API_BASE_URL}/commentThreads?part=snippet,replies&videoId=${videoId}&key=${apiKey}&maxResults=${MAX_RESULTS_PER_PAGE}&pageToken=${nextPageToken}&order=relevance`;
-      const response = await fetch(nextUrl);
-      if(!response.ok){
-        const errorData = await response.json();
-        throw new Error(errorData.error.message || `HTTP error! status: ${response.status}`);
-      }
-      currentData = await response.json();
-    }
-    
-    return comments.slice(0, limit);
-  } catch (error) {
-    console.error('Failed to fetch comments:', error);
-    throw error;
-  }
+    } while (nextPageToken);
+
+    return comments;
 };

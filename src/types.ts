@@ -1,48 +1,46 @@
-export interface YouTubeComment {
-  id: string;
-  text: string;
-  author: string;
-  authorProfileImageUrl: string;
-  likeCount: number;
-  replyCount: number;
-  publishedAt: string;
+export interface Comment {
+    id: string;
+    text: string;
+    author: string;
+    authorProfileImageUrl: string;
+    authorChannelUrl: string;
+    likeCount: number;
+    publishedAt: string;
+    replies?: Comment[];
 }
 
-export interface CommentCategory {
-  name: string;
-  description: string;
-  comments: YouTubeComment[];
-  count: number;
+export interface Topic {
+    title: string;
+    summary: string;
+    comments: Comment[];
 }
 
 export interface AnalysisResult {
-  totalComments: number;
-  analyzedComments: number;
-  categories: CommentCategory[];
+    topics: Topic[];
+    sentiment: {
+        positive: number;
+        negative: number;
+        neutral: number;
+    };
+    summary: string;
 }
 
-export interface AnalysisStats {
-  totalComments: number;
-  analyzedComments: number;
-  questions: number;
-  feedback: number;
-  positive: number;
-  negative: number;
+export interface VideoDetails {
+    id: string;
+    title: string;
+    author: string;
+    thumbnailUrl: string;
+    viewCount: number;
+    likeCount: number;
+    commentCount: number;
 }
 
-export type AppStatus = 'idle' | 'loading' | 'error' | 'results' | 'config-error';
+export type AppStatus = 'idle' | 'loading' | 'success' | 'error' | 'config-error';
 
-export interface Progress {
-  value: number;
-  text: string;
-  eta?: number;
-}
+export type AuthStatus = 'unauthenticated' | 'loading' | 'authenticated' | 'error';
 
-// For live conversation feature
-export type LiveSessionStatus = 'idle' | 'loading' | 'listening' | 'processing' | 'speaking';
-
-export interface TranscriptionTurn {
-  speaker: 'user' | 'model';
-  text: string;
-  isFinal?: boolean;
+export interface AuthState {
+    status: AuthStatus;
+    token: string | null;
+    error: string | null;
 }

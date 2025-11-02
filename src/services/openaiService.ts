@@ -1,4 +1,4 @@
-// Placeholder for OpenAI service. Not used in this version.
-export const analyzeWithOpenAI = async () => {
-    throw new Error('OpenAI service is not implemented.');
+// This is a placeholder file. The application uses GeminiService.
+export const analyzeCommentsWithOpenAI = async () => {
+    throw new Error("OpenAI service is not implemented in this version.");
 };

@@ -1,55 +1,18 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-import './style.css';
+/// <reference types="chrome" />
 
-const MOUNT_POINT_SELECTOR = '#secondary.style-scope.ytd-watch-flexy';
-const APP_CONTAINER_ID = 'youtube-comment-analyzer-root';
+// This script is injected into YouTube pages to interact with the DOM.
+console.log("YouTube Comment Analyzer content script loaded.");
 
-let root: ReactDOM.Root | null = null;
-
-const injectApp = () => {
-    const mountPoint = document.querySelector(MOUNT_POINT_SELECTOR);
-
-    if (mountPoint && !document.getElementById(APP_CONTAINER_ID)) {
-        const appContainer = document.createElement('div');
-        appContainer.id = APP_CONTAINER_ID;
-        // Inject as the first element in the secondary column
-        mountPoint.prepend(appContainer);
-
-        root = ReactDOM.createRoot(appContainer);
-        root.render(
-        <React.StrictMode>
-            <App />
-        </React.StrictMode>
-        );
+// Listen for messages from the popup or background script
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === "getVideoId") {
+        // Simple regex to get video ID from URL
+        const videoIdMatch = window.location.search.match(/v=([^&]+)/);
+        if (videoIdMatch) {
+            sendResponse({ videoId: videoIdMatch[1] });
+        } else {
+            sendResponse({ videoId: null });
+        }
     }
-}
-
-const observer = new MutationObserver((mutations, obs) => {
-    const mountPoint = document.querySelector(MOUNT_POINT_SELECTOR);
-    if(mountPoint) {
-        injectApp();
-        obs.disconnect();
-    }
+    return true; // Indicates async response
 });
-
-// For YouTube's SPA navigation
-let lastUrl = location.href; 
-new MutationObserver(() => {
-  const url = location.href;
-  if (url !== lastUrl) {
-    lastUrl = url;
-    // URL has changed, re-check for injection point
-    const container = document.getElementById(APP_CONTAINER_ID);
-    if (container) {
-        root?.unmount();
-        container.remove();
-    }
-    // Delay injection to allow YouTube to render the new page
-    setTimeout(injectApp, 1000);
-  }
-}).observe(document, {subtree: true, childList: true});
-
-
-injectApp();
