@@ -1,0 +1,134 @@
+/* styles.css */
+
+/* General container for the custom forum */
+#gemini-forum-view {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-family: Roboto, Arial, sans-serif;
+    color: #0f0f0f; /* YouTube text color */
+}
+
+/* Style for individual AI-generated threads */
+.gemini-thread {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    background-color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+/* Thread Title */
+.gemini-thread .thread-title {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #0f0f0f;
+    margin: 0 0 5px 0;
+    cursor: pointer;
+}
+
+/* Thread Summary */
+.gemini-thread .thread-summary {
+    font-size: 0.9rem;
+    color: #606060;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed #eee;
+}
+
+/* Container for all content inside a thread */
+.thread-content {
+    padding-left: 10px;
+    border-left: 3px solid #f0f0f0;
+}
+
+/* Original Comments Container */
+.thread-comments {
+    margin: 10px 0;
+    max-height: 250px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+/* Individual Original Comment Text */
+.thread-comments .original-comment {
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+    padding: 8px;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    color: #333;
+}
+
+.original-comment strong {
+    color: #065fd4;
+}
+
+/* User-generated replies container */
+.forum-replies {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid #eee;
+}
+
+.user-reply {
+    margin-bottom: 10px;
+    padding: 8px;
+    background-color: #e8f0fe; /* Light blue to distinguish user replies */
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.user-reply p {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+/* Reply form styles */
+.reply-form textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: vertical;
+}
+
+/* Buttons */
+.gemini-thread button {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 18px; /* Pill shape */
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-right: 5px;
+    transition: background-color 0.2s;
+}
+
+.gemini-thread .save-reply,
+.gemini-thread .add-reply {
+    background-color: #065fd4; /* YouTube blue */
+    color: white;
+}
+
+.gemini-thread .save-reply:hover,
+.gemini-thread .add-reply:hover {
+    background-color: #054cb0;
+}
+
+.gemini-thread .delete-reply {
+    background-color: #f1f1f1;
+    color: #606060;
+}
+
+.gemini-thread .delete-reply:hover {
+    background-color: #e3e3e3;
+}

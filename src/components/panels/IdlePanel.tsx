@@ -1,44 +1,22 @@
-import React, { useState } from 'react';
-import { useAppStore } from '../../store';
-import { getYouTubeVideoId } from '../../utils';
+import React from 'react';
 
-const IdlePanel: React.FC = () => {
-    const { actions } = useAppStore();
-    const [videoUrl, setVideoUrl] = useState('');
-    const [error, setError] = useState('');
+interface IdlePanelProps {
+    onAnalyze: () => void;
+    isLoading: boolean;
+}
 
-    const handleAnalyze = () => {
-        const videoId = getYouTubeVideoId(videoUrl);
-        if (videoId) {
-            setError('');
-            actions.startAnalysis(videoId);
-        } else {
-            setError('Please enter a valid YouTube video URL.');
-        }
-    };
-
+const IdlePanel: React.FC<IdlePanelProps> = ({ onAnalyze, isLoading }) => {
     return (
-        <div className="p-4 text-center">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Ready to Analyze</h3>
-            <p className="text-gray-600 mb-4">
-                Paste a YouTube video URL below to get started.
-            </p>
-            <div className="flex flex-col gap-2">
-                <input
-                    type="text"
-                    value={videoUrl}
-                    onChange={(e) => setVideoUrl(e.target.value)}
-                    placeholder="https://www.youtube.com/watch?v=..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                />
-                <button
-                    onClick={handleAnalyze}
-                    className="w-full px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700"
-                >
-                    Analyze Comments
-                </button>
-            </div>
-            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+        <div className="text-center p-8">
+            <h2 className="text-lg font-semibold">Ready to Analyze</h2>
+            <p className="text-gray-600 my-4">Click the button below to start analyzing comments on the current YouTube video page.</p>
+            <button
+                onClick={onAnalyze}
+                disabled={isLoading}
+                className="w-full px-6 py-3 bg-red-600 text-white font-semibold rounded-lg shadow-md hover:bg-red-700 disabled:bg-gray-400"
+            >
+                {isLoading ? "Starting..." : "Analyze Comments"}
+            </button>
         </div>
     );
 };

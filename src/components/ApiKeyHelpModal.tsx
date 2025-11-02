@@ -1,3 +1,4 @@
+// FIX: Replaced placeholder text with a functional React component.
 import React from 'react';
 
 interface ApiKeyHelpModalProps {
@@ -10,13 +11,11 @@ const ApiKeyHelpModal: React.FC<ApiKeyHelpModalProps> = ({ isOpen, onClose }) =>
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-          <div className="bg-white p-4 rounded-lg">
-            <h2 className="text-lg font-bold">API Key Help</h2>
-            <p className="my-2">This is a placeholder for API key help instructions.</p>
-            <div className="text-right mt-4">
-              <button onClick={onClose} className="px-4 py-2 bg-gray-200 rounded">Close</button>
+            <div className="bg-white p-6 rounded-lg shadow-lg">
+                <h2 className="text-lg font-bold">API Key Help</h2>
+                <p className="my-4">You need to provide API keys in the extension's options page to use this feature.</p>
+                <button onClick={onClose} className="px-4 py-2 bg-blue-500 text-white rounded">Close</button>
             </div>
-          </div>
         </div>
     );
 };

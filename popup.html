@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Gemini Forum</title>
+    <style>
+        body { width: 250px; font-family: Arial, sans-serif; padding: 10px; text-align: center; }
+        .container { display: flex; flex-direction: column; gap: 10px; }
+        button { padding: 10px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
+        #auth-button { background-color: #4285F4; color: white; }
+        #analyze-button { background-color: #34A853; color: white; }
+        #status { font-size: 0.8em; color: gray; margin-top: 5px; }
+        #user-display { font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div id="auth-container" class="container">
+        <p id="auth-status">Please sign in to analyze comments.</p>
+        <button id="auth-button">Sign In with Google</button>
+    </div>
+
+    <div id="main-container" class="container" style="display: none;">
+        <p id="user-display">Welcome!</p>
+        <button id="analyze-button">Analyze / Toggle Forum</button>
+        <p id="status">Click the button on a YouTube video page to start.</p>
+    </div>
+
+    <script src="popup.js" type="module"></script>
+</body>
+</html>

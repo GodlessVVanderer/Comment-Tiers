@@ -1,21 +1,19 @@
+// FIX: Replaced placeholder text with a functional React component.
 import React from 'react';
+import { formatNumber } from '../utils';
 
 interface StatsCardProps {
-  label: string;
-  value: string | number;
-  icon?: React.ReactNode;
+    title: string;
+    value: number | string;
 }
 
-const StatsCard: React.FC<StatsCardProps> = ({ label, value, icon }) => {
-  return (
-    <div className="flex items-center p-4 bg-white rounded-lg shadow">
-      {icon && <div className="p-3 mr-4 text-blue-500 bg-blue-100 rounded-full">{icon}</div>}
-      <div>
-        <p className="text-sm font-medium text-gray-600">{label}</p>
-        <p className="text-lg font-semibold text-gray-700">{value}</p>
-      </div>
-    </div>
-  );
+const StatsCard: React.FC<StatsCardProps> = ({ title, value }) => {
+    return (
+        <div className="border p-4 rounded-lg bg-white shadow">
+            <h4 className="text-gray-500">{title}</h4>
+            <p className="text-2xl font-bold">{typeof value === 'number' ? formatNumber(value) : value}</p>
+        </div>
+    );
 };
 
 export default StatsCard;

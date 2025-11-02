@@ -1,16 +1,20 @@
+
+// Fix: Add Chrome types reference to resolve 'Cannot find name chrome' errors.
 /// <reference types="chrome" />
+// src/background.ts
+console.log("Background script running.");
 
-console.log("YouTube Comment Analyzer background script loaded.");
-
-// Listener for when the extension is installed or updated
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('Extension installed.');
+    console.log("YouTube Comment Analyzer installed.");
 });
 
-// A listener for messages from other parts of the extension
+// Example of a listener for messages from content scripts or popups
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'GREETING') {
-    sendResponse({ farewell: 'goodbye' });
-  }
-  return true; // Keep the message channel open for async response
+    if (request.action === "analyzeComments") {
+        console.log("Received request to analyze comments for video:", request.videoId);
+        // Here you would trigger the analysis logic.
+        // This is often done in the background script to handle long-running tasks.
+        sendResponse({ status: "Analysis started" });
+    }
+    return true; // Indicates that the response is sent asynchronously
 });

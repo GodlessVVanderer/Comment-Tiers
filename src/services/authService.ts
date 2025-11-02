@@ -1,41 +1,43 @@
-/// <reference types="chrome" />
 
-export const signIn = (): Promise<string> => {
+// Fix: Add Chrome types reference to resolve 'Cannot find name chrome' errors.
+/// <reference types="chrome" />
+// src/services/authService.ts
+
+export async function signIn(): Promise<string | null> {
     return new Promise((resolve, reject) => {
         chrome.identity.getAuthToken({ interactive: true }, (token) => {
-            if (chrome.runtime.lastError || !token) {
-                reject(new Error(chrome.runtime.lastError?.message || "Authentication failed."));
-            } else {
-                resolve(token);
+            if (chrome.runtime.lastError) {
+                reject(chrome.runtime.lastError);
+                return;
             }
+            resolve(token ?? null);
         });
     });
-};
+}
 
-export const signOut = (): Promise<void> => {
-    return new Promise((resolve) => {
-        chrome.identity.getAuthToken({ interactive: false }, (token) => {
-            if (token) {
-                // To "sign out", we revoke the token.
-                const url = `https://accounts.google.com/o/oauth2/revoke?token=${token}`;
-                fetch(url).finally(() => {
-                     chrome.identity.removeCachedAuthToken({ token }, () => resolve());
-                });
-            } else {
-                resolve();
-            }
-        });
-    });
-};
-
-export const checkAuthStatus = (): Promise<string | null> => {
-    return new Promise((resolve) => {
-        chrome.identity.getAuthToken({ interactive: false }, (token) => {
-            if (chrome.runtime.lastError || !token) {
+export async function getProfile(): Promise<{ email: string } | null> {
+    return new Promise((resolve, reject) => {
+        chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' }, (userInfo) => {
+            if (chrome.runtime.lastError) {
+                // Not necessarily an error, user might just not be signed in
                 resolve(null);
+                return;
+            }
+            resolve(userInfo);
+        });
+    });
+}
+
+export async function checkAuthStatus(): Promise<boolean> {
+    const token = await new Promise<string | undefined>((resolve) => {
+        chrome.identity.getAuthToken({ interactive: false }, (token) => {
+            // Check lastError to see if the user is not signed in.
+            if (chrome.runtime.lastError) {
+                resolve(undefined);
             } else {
                 resolve(token);
             }
         });
     });
-};
+    return !!token;
+}

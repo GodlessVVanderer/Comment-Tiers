@@ -1,1 +1,44 @@
-full contents of manifest.json
+{
+  "manifest_version": 3,
+  "name": "YouTube Comment Forum Extension",
+  "version": "1.0",
+  "description": "Analyzes and categorizes YouTube comments using the Gemini API and secure Google Sign-In.",
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Gemini Forum Analyzer"
+  },
+  
+  "permissions": [
+    "identity",          
+    "tabs",              
+    "storage"          
+  ],
+  
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://generativelanguage.googleapis.com/"
+  ],
+  
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  
+  "oauth2": {
+    "client_id": "YOUR_GOOGLE_CLOUD_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/generative-language" 
+    ]
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/watch?*"],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
