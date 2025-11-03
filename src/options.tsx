@@ -1,5 +1,4 @@
-
-// Fix: Add Chrome types reference to resolve 'Cannot find name chrome' errors.
+// Fix: Add reference to chrome types to resolve "Cannot find name 'chrome'" error.
 /// <reference types="chrome" />
 import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';

@@ -88,7 +88,12 @@ function renderForumUI(state) {
         
         let originalCommentsHtml = thread.comment_ids.map(id => {
             const comment = originalCommentMap[id];
-            return comment ? `<p class="original-comment"><strong>${comment.author}:</strong> ${comment.text}</p>` : '';
+            return comment ? `
+                <div class="original-comment-container">
+                    <p class="original-comment"><strong>${comment.author}:</strong> ${comment.text}</p>
+                    <button class="report-comment" data-comment-id="${id}">Report</button>
+                </div>
+            ` : '';
         }).join('');
 
         let repliesHtml = (interactions[thread.title] || []).map(reply => `
@@ -157,6 +162,13 @@ function addEventListeners(container) {
 
             await saveForumState(state);
             renderForumUI(state); // Re-render to remove the reply
+        }
+
+        if (target.classList.contains('report-comment')) {
+            const commentId = target.dataset.commentId;
+            console.log(`Comment reported: ${commentId}`);
+            target.textContent = 'Reported';
+            target.disabled = true;
         }
     });
 }

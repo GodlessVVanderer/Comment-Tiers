@@ -53,15 +53,28 @@
     padding-right: 10px;
 }
 
-/* Individual Original Comment Text */
-.thread-comments .original-comment {
-    font-size: 0.9rem;
+/* Container for a single original comment and its action buttons */
+.original-comment-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
     margin-bottom: 8px;
     padding: 8px;
     background-color: #f9f9f9;
     border-radius: 4px;
-    color: #333;
 }
+
+/* Individual Original Comment Text */
+.original-comment-container .original-comment {
+    font-size: 0.9rem;
+    color: #333;
+    flex-grow: 1; /* Allow text to take up available space */
+    margin: 0;
+    padding: 0;
+    background: none;
+}
+
 
 .original-comment strong {
     color: #065fd4;
@@ -131,4 +144,21 @@
 
 .gemini-thread .delete-reply:hover {
     background-color: #e3e3e3;
+}
+
+/* Report Button */
+.gemini-thread .report-comment {
+    background-color: #f1f1f1;
+    color: #606060;
+    flex-shrink: 0;
+}
+
+.gemini-thread .report-comment:hover {
+    background-color: #e3e3e3;
+}
+
+.gemini-thread .report-comment:disabled {
+    background-color: #e9e9e9;
+    color: #aaa;
+    cursor: not-allowed;
 }

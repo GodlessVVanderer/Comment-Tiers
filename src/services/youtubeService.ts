@@ -1,5 +1,4 @@
-
-// Fix: Add Chrome types reference to resolve 'Cannot find name chrome' error.
+// Fix: Add reference to chrome types to resolve "Cannot find name 'chrome'" error.
 /// <reference types="chrome" />
 import { Comment, VideoDetails } from "../types";
 

@@ -58,13 +58,15 @@ async function analyzeComments(comments) {
         'Authorization': `Bearer ${accessToken}` 
       },
       body: JSON.stringify({
-        config: {
-          systemInstruction: SYSTEM_INSTRUCTION
+        // Using the official `systemInstruction` field for clarity and correctness.
+        systemInstruction: {
+          parts: [{ text: SYSTEM_INSTRUCTION }]
         },
+        // The user's prompt is the main content.
         contents: [
-          {
+          { 
             role: "user",
-            parts: [{ text: prompt }]
+            parts: [{ text: prompt }] 
           }
         ]
       })
@@ -78,11 +80,19 @@ async function analyzeComments(comments) {
             accessToken = null;
             return { error: "Authentication expired. Please sign in again." };
         }
-        throw new Error(`API call failed: ${data.error.message || 'Unknown error'}`);
+        // Ensure data.error and data.error.message exist before accessing
+        const errorMessage = data?.error?.message || 'Unknown API error';
+        throw new Error(`API call failed: ${errorMessage}`);
+    }
+
+    if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
+        throw new Error("Invalid response structure from API.");
     }
 
     const jsonText = data.candidates[0].content.parts[0].text;
-    const analysis = JSON.parse(jsonText);
+    // The API might wrap the JSON in markdown, so we need to clean it.
+    const cleanedJsonText = jsonText.replace(/^```json\s*|```\s*$/g, '');
+    const analysis = JSON.parse(cleanedJsonText);
     return analysis;
 
   } catch (error) {
