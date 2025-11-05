@@ -1,40 +1,27 @@
+export interface UserInfo {
+  email: string;
+  name: string;
+  picture: string;
+}
+
 export interface Comment {
-    id: string;
-    text: string;
-    author: string;
-    authorProfileImageUrl: string;
-    publishedAt: string;
-    likeCount: number;
-    replyCount: number;
+  id: string;
+  text: string;
 }
 
-export interface VideoDetails {
-    title: string;
-    author: string;
-    viewCount: number;
-    likeCount: number;
-    commentCount: number;
+export interface ThematicGroup {
+  theme_title: string;
+  summary: string;
+  comment_ids: string[];
 }
 
-export interface AnalysisCategory {
-    name: string;
-    comments: Comment[];
-    summary?: string;
+export interface TriageResult {
+  passed_ids: string[];
+  failed_ids: string[];
+  total_processed: number;
 }
 
 export interface AnalysisResult {
-    summary: string;
-    sentiment: {
-        positive: number;
-        negative: number;
-        neutral: number;
-    };
-    categories: AnalysisCategory[];
-    topics: string[];
-    stats: {
-        totalComments: number;
-        commentsAnalyzed: number;
-    };
+  triage: TriageResult;
+  thematic_groups: ThematicGroup[];
 }
-
-export type AppStatus = 'idle' | 'loading' | 'success' | 'error' | 'config_error' | 'unauthenticated';
