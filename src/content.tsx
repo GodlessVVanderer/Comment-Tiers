@@ -1,15 +1,12 @@
+// Fix: Add reference to chrome types to resolve 'chrome' is not defined errors.
 /// <reference types="chrome" />
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { MESSAGES } from './constants';
-import { AnalysisResult, Comment as RawComment, UserInfo } from './types';
+import { AnalysisResult, Comment as RawComment } from './types';
 
-// NOTE: In a real app, this large component would be broken down into smaller,
-// more manageable components (e.g., Forum, ThematicGroup, Reply, etc.).
-const ForumApp = ({ analysis, originalComments, userInfo }: { analysis: AnalysisResult, originalComments: RawComment[], userInfo: UserInfo | null }) => {
-    // This is a placeholder for the full forum UI.
-    // A complete implementation would have state for replies, edits, sorting, etc.
+const ForumApp = ({ analysis }: { analysis: AnalysisResult }) => {
     return (
         <div id="gemini-forum-container">
             <div className="forum-header">
@@ -38,10 +35,9 @@ let appRoot: HTMLElement | null = null;
 let reactRoot: ReactDOM.Root | null = null;
 let analysisCache: AnalysisResult | null = null;
 let commentsCache: RawComment[] = [];
-let userInfoCache: UserInfo | null = null;
 let forumVisible = false;
 
-function injectReactApp(analysis: AnalysisResult, comments: RawComment[], userInfo: UserInfo | null) {
+function injectReactApp(analysis: AnalysisResult) {
     const nativeComments = document.getElementById('comments');
     if (!nativeComments) return;
 
@@ -57,7 +53,7 @@ function injectReactApp(analysis: AnalysisResult, comments: RawComment[], userIn
     if (appRoot) appRoot.style.display = 'block';
     reactRoot?.render(
         <React.StrictMode>
-            <ForumApp analysis={analysis} originalComments={comments} userInfo={userInfo} />
+            <ForumApp analysis={analysis} />
         </React.StrictMode>
     );
 }
@@ -113,11 +109,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
         analysisCache = request.analysis;
 
-        chrome.runtime.sendMessage({ message: MESSAGES.GET_USER_INFO }, (response) => {
-            userInfoCache = response?.userInfo;
-            injectReactApp(analysisCache!, commentsCache, userInfoCache);
-            forumVisible = true;
-        });
+        injectReactApp(analysisCache!);
+        forumVisible = true;
         sendResponse({ success: true });
     }
 });

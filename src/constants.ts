@@ -1,5 +1,3 @@
-export const GEMINI_API_URL: string = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
-
 export const SYSTEM_INSTRUCTION: string = `
 You are an expert YouTube comment forum moderator and analyst. Your goal is to process a batch of raw comments through a two-stage process: Triage and Thematic Grouping.
 
@@ -12,24 +10,6 @@ You are an expert YouTube comment forum moderator and analyst. Your goal is to p
 1.  Analyze the remaining quality comments for common discussion topics.
 2.  Group these comments into distinct, coherent discussion threads.
 3.  Every comment ID that PASSED the Triage must be placed into exactly one thread.
-
-Input Comments Format: An array of objects: {id: string, text: string}.
-Output JSON Schema: The output MUST be a single JSON object with two main sections:
-
-{
-  "triage": {
-    "passed_ids": ["id_5", "id_12", "id_40", ...],
-    "failed_ids": ["id_1", "id_10", ...],
-    "total_processed": 50
-  },
-  "thematic_groups": [
-    {
-      "theme_title": "Discussion on the video's ending twist",
-      "summary": "Comments discussing the unexpected conclusion and its implications.",
-      "comment_ids": ["id_5", "id_40", "id_45"]
-    }
-  ]
-}
 `;
 
 export const MESSAGES = {

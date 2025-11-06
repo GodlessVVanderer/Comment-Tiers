@@ -1,3 +1,4 @@
+// Fix: Add reference to chrome types to resolve 'chrome' is not defined errors.
 /// <reference types="chrome" />
 
 import React from 'react';

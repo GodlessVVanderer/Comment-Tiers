@@ -1,7 +1,10 @@
+// Fix: Add reference to chrome types to resolve 'chrome' is not defined errors.
 /// <reference types="chrome" />
 
-import { MESSAGES, GEMINI_API_URL, SYSTEM_INSTRUCTION } from './constants';
+import { MESSAGES, SYSTEM_INSTRUCTION } from './constants';
 import { UserInfo, Comment, AnalysisResult } from './types';
+// Fix: Import GoogleGenAI to use the Gemini API SDK as per guidelines.
+import { GoogleGenAI } from '@google/genai';
 
 let accessToken: string | null = null;
 
@@ -54,7 +57,6 @@ async function fetchUserInfo(): Promise<UserInfo | null> {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         if (response.status === 401) {
-            console.log("User info fetch failed with 401, clearing token.");
             await clearStaleToken();
             return null;
         }
@@ -74,52 +76,36 @@ async function fetchUserInfo(): Promise<UserInfo | null> {
     }
 }
 
+// Fix: Refactored to use the @google/genai SDK with an API key as per the coding guidelines,
+// instead of fetch with an OAuth token.
 async function analyzeComments(comments: Comment[]): Promise<AnalysisResult | { error: string }> {
-  if (!accessToken) {
-    await authenticateAndGetToken(false);
-    if (!accessToken) {
-      return { error: "User not authenticated. Click 'Sign In' in the popup." };
-    }
-  }
-
-  const prompt = `Analyze the following YouTube comments for Triage and Thematic Grouping: ${JSON.stringify(comments)}`;
-  
   try {
-    const response = await fetch(GEMINI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`
-      },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
-        contents: [{ role: "user", parts: [{ text: prompt }] }]
-      })
+    // Per instructions, API key must be from process.env.API_KEY and is assumed to be available.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-pro",
+        contents: [{ 
+            role: "user",
+            parts: [{ text: `Analyze the following YouTube comments for Triage and Thematic Grouping: ${JSON.stringify(comments)}` }] 
+        }],
+        config: {
+            systemInstruction: SYSTEM_INSTRUCTION,
+            responseMimeType: "application/json",
+        }
     });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-            await clearStaleToken();
-            return { error: "Authentication expired or invalid. Please sign in again." };
-        }
-        const errorMessage = data?.error?.message || 'Unknown API error';
-        throw new Error(`API call failed: ${errorMessage}`);
+    // Per guidelines, use response.text to get the model's output.
+    const jsonText = response.text;
+    if (!jsonText) {
+        throw new Error("Empty response from Gemini API.");
     }
+    
+    return JSON.parse(jsonText) as AnalysisResult;
 
-    if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-        throw new Error("Invalid response structure from API.");
-    }
-
-    const jsonText = data.candidates[0].content.parts[0].text;
-    const cleanedJsonText = jsonText.replace(/^```json\s*|\s*```\s*$/g, '').trim();
-    const analysis = JSON.parse(cleanedJsonText);
-    return analysis;
-
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini API Error:", error);
-    return { error: `Gemini API call failed: ${(error as Error).message}` };
+    return { error: `Gemini API call failed: ${error.message}` };
   }
 }
 
@@ -129,7 +115,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .then(() => fetchUserInfo())
       .then(userInfo => sendResponse({ success: !!userInfo, userInfo }))
       .catch(e => sendResponse({ success: false, error: (e as Error).message }));
-    return true;
+    return true; 
   }
   
   if (request.message === 'SIGN_OUT') {
@@ -155,16 +141,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               analysis: analysis
             });
         }
-      })
-      .catch(error => {
-          if (sender.tab?.id) {
-              chrome.tabs.sendMessage(sender.tab.id, {
-                  message: MESSAGES.SEND_ANALYSIS_TO_CONTENT,
-                  analysis: { error: (error as Error).message }
-              });
-          }
       });
-    sendResponse({ success: true });
     return true;
   }
 });

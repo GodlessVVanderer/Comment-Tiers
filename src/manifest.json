@@ -43,12 +43,8 @@
   },
   "web_accessible_resources": [
     {
-      "resources": [
-        "assets/*"
-      ],
-      "matches": [
-        "https://www.youtube.com/*"
-      ]
+      "resources": ["styles.css"],
+      "matches": ["https://www.youtube.com/*"]
     }
   ]
 }
